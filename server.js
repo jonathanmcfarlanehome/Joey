@@ -1177,6 +1177,50 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    /**
+     * Static file serving
+     *
+     * Any GET request that does not target the API will be served from
+     * the `public` directory. This allows us to host a simple web
+     * front‑end alongside the API without additional tooling. Only
+     * common text and image content types are handled.
+     */
+    if (!pathname.startsWith('/api') && method === 'GET') {
+      // map '/' to '/index.html'
+      let filePath = pathname === '/' ? '/index.html' : pathname;
+      const resolved = path.join(__dirname, 'public', decodeURIComponent(filePath));
+      // Prevent directory traversal
+      if (!resolved.startsWith(path.join(__dirname, 'public'))) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+      }
+      fs.readFile(resolved, (err, content) => {
+        if (err) {
+          res.writeHead(404);
+          res.end('Not found');
+          return;
+        }
+        // determine content type
+        const ext = path.extname(resolved).toLowerCase();
+        const mimeTypes = {
+          '.html': 'text/html',
+          '.css': 'text/css',
+          '.js': 'application/javascript',
+          '.json': 'application/json',
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.gif': 'image/gif',
+          '.svg': 'image/svg+xml',
+        };
+        const type = mimeTypes[ext] || 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': type });
+        res.end(content);
+      });
+      return;
+    }
+
     // If we reach here no route matched
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
