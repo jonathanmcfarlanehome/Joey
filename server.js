@@ -221,7 +221,26 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {
-    // Only API calls are implemented here. Provide a simple 404 for others.
+  if (!pathname.startsWith('/api') && method === 'GET') {
+  let filePath = pathname === '/' ? '/index.html' : pathname;
+  const resolved = path.join(__dirname, 'public', decodeURIComponent(filePath));
+  if (!resolved.startsWith(path.join(__dirname, 'public'))) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+  fs.readFile(resolved, (err, content) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    res.writeHead(200);
+    res.end(content);
+  });
+  return;
+} Only API calls are implemented here. Provide a simple 404 for others.
+   
     if (!pathname.startsWith('/api')) {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end('Jira‑lite server running. Use the /api endpoints.');
