@@ -1,0 +1,18 @@
+[
+  {
+    "id": "e13f99a3305c6c16",
+    "projectId": "c4b93f756890e120",
+    "title": "Bug in login",
+    "description": "Cannot login when password has spaces.",
+    "priority": "High",
+    "status": "In Progress",
+    "assignee": null,
+    "dueDate": null,
+    "labels": [],
+    "parentId": null,
+    "creatorId": "906f0f12f2c0e6f9",
+    "createdAt": "2025-08-04T13:51:46.604Z",
+    "updatedAt": "2025-08-04T13:59:23.099Z",
+    "sprintId": "b94e4c37ffbfa5e8"
+  }
+]

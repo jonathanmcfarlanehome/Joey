@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Jira‑lite – Sprints</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f5f5f5;
+    }
+    h1 {
+      margin-bottom: 1rem;
+    }
+    .sprint {
+      border: 1px solid #ccc;
+      background: #fff;
+      margin-bottom: 0.5rem;
+      padding: 0.5rem;
+    }
+    .sprint .actions {
+      margin-top: 0.5rem;
+    }
+    form {
+      background: #fff;
+      padding: 1rem;
+      border: 1px solid #ccc;
+      max-width: 400px;
+    }
+    input {
+      width: 100%;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    button {
+      padding: 0.5rem 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sprints</h1>
+  <div id="sprints"></div>
+  <form id="createSprintForm">
+    <h3>Create Sprint</h3>
+    <input type="text" id="sprintName" placeholder="Sprint name" required />
+    <button type="submit">Create</button>
+  </form>
+  <script src="common.js"></script>
+  <script>
+    requireAuth();
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get('projectId');
+    async function loadSprints() {
+      const res = await api('/api/projects/' + projectId + '/sprints', { method: 'GET' });
+      const sprints = await res.json();
+      const container = document.getElementById('sprints');
+      container.innerHTML = '';
+      sprints.forEach((sprint) => {
+        const div = document.createElement('div');
+        div.className = 'sprint';
+        div.innerHTML = '<strong>' + sprint.name + '</strong> - ' + sprint.status;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        if (sprint.status === 'planning') {
+          const startBtn = document.createElement('button');
+          startBtn.innerText = 'Start';
+          startBtn.onclick = async () => {
+            const res2 = await api('/api/sprints/' + sprint.id + '/start', { method: 'POST' });
+            if (res2.ok) {
+              loadSprints();
+            } else {
+              const data = await res2.json();
+              alert(data.error || 'Could not start sprint');
+            }
+          };
+          actions.appendChild(startBtn);
+        }
+        if (sprint.status === 'active') {
+          const closeBtn = document.createElement('button');
+          closeBtn.innerText = 'Close';
+          closeBtn.onclick = async () => {
+            const res2 = await api('/api/sprints/' + sprint.id + '/close', { method: 'POST' });
+            if (res2.ok) {
+              loadSprints();
+            } else {
+              const data = await res2.json();
+              alert(data.error || 'Could not close sprint');
+            }
+          };
+          actions.appendChild(closeBtn);
+        }
+        // link to board for this sprint
+        const boardLink = document.createElement('a');
+        boardLink.href = '/board.html?projectId=' + projectId + '&sprintId=' + sprint.id;
+        boardLink.innerText = 'Board';
+        boardLink.style.marginLeft = '1rem';
+        actions.appendChild(boardLink);
+        div.appendChild(actions);
+        container.appendChild(div);
+      });
+    }
+    document.getElementById('createSprintForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('sprintName').value;
+      const res = await api('/api/projects/' + projectId + '/sprints', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        document.getElementById('sprintName').value = '';
+        loadSprints();
+      } else {
+        alert(data.error || 'Could not create sprint');
+      }
+    });
+    loadSprints();
+  </script>
+</body>
+</html>

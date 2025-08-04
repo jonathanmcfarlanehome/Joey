@@ -1,0 +1,9 @@
+[
+  {
+    "id": "906f0f12f2c0e6f9",
+    "email": "admin@example.com",
+    "passwordHash": "d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1",
+    "role": "admin",
+    "createdAt": "2025-08-04T13:51:40.038Z"
+  }
+]

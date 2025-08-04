@@ -1,0 +1,16 @@
+[
+  {
+    "id": "d2a98205ca91fa14",
+    "userId": "906f0f12f2c0e6f9",
+    "message": "Sprint \"Sprint 1\" has started",
+    "read": true,
+    "createdAt": "2025-08-04T13:59:11.743Z"
+  },
+  {
+    "id": "2d94002957c0e8f1",
+    "userId": "906f0f12f2c0e6f9",
+    "message": "Issue \"Bug in login\" status changed to In Progress",
+    "read": false,
+    "createdAt": "2025-08-04T13:59:23.100Z"
+  }
+]

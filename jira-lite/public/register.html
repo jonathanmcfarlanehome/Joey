@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Jira‑lite – Register</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 2rem;
+      background: #f5f5f5;
+    }
+    h1 {
+      margin-bottom: 1rem;
+    }
+    form {
+      background: #fff;
+      padding: 1rem;
+      border: 1px solid #ccc;
+      max-width: 300px;
+    }
+    input, select {
+      width: 100%;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    button {
+      padding: 0.5rem 1rem;
+    }
+    #message {
+      color: red;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Register</h1>
+  <form id="registerForm">
+    <input type="email" id="email" placeholder="Email" required />
+    <input type="password" id="password" placeholder="Password" required />
+    <label for="role">Role:</label>
+    <select id="role">
+      <option value="developer">Developer</option>
+      <option value="project_manager">Project Manager</option>
+      <option value="viewer">Viewer</option>
+      <option value="admin">Admin</option>
+    </select>
+    <button type="submit">Register</button>
+  </form>
+  <p>
+    Already have an account? <a href="/index.html">Login</a>
+  </p>
+  <div id="message"></div>
+  <script>
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const role = document.getElementById('role').value;
+      document.getElementById('message').innerText = '';
+      try {
+        const response = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, role })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Registration failed');
+        }
+        // Auto‑login after registration
+        const loginRes = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const loginData = await loginRes.json();
+        if (loginRes.ok) {
+          localStorage.setItem('token', loginData.token);
+          localStorage.setItem('user', JSON.stringify(loginData.user));
+          window.location.href = '/projects.html';
+        } else {
+          // fallback: redirect to login page
+          window.location.href = '/index.html';
+        }
+      } catch (err) {
+        document.getElementById('message').innerText = err.message;
+      }
+    });
+  </script>
+</body>
+</html>
