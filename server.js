@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
+const publicDir = path.join(__dirname, 'public');
+
 
 /*
  * Simple Jira‑like backend
