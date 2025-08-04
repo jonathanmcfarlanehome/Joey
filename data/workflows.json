@@ -7,5 +7,14 @@
       "Done"
     ],
     "transitions": {}
+  },
+  {
+    "projectId": "89d6b58fb38f5597",
+    "statuses": [
+      "To Do",
+      "In Progress",
+      "Done"
+    ],
+    "transitions": {}
   }
 ]

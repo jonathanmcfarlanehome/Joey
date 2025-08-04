@@ -5,5 +5,12 @@
     "passwordHash": "d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1",
     "role": "admin",
     "createdAt": "2025-08-04T13:51:40.038Z"
+  },
+  {
+    "id": "cabfe557df657a3c",
+    "email": "jonathan30mcfarlane@gmail.com",
+    "passwordHash": "f6952d6eef555ddd87aca66e56b91530222d6e318414816f3ba7cf5bf694bf0f",
+    "role": "admin",
+    "createdAt": "2025-08-04T19:25:12.282Z"
   }
 ]
