@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Crowley App – Projects</title>
+  <style>
+    :root {
+      --primary-color: #ffd700;
+      --primary-hover: #ffed4e;
+      --secondary-color: #1a1a1a;
+      --accent-color: #333333;
+      --success-color: #00cc00;
+      --warning-color: #ff8800;
+      --danger-color: #cc0000;
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+      --text-muted: #888888;
+      --background-primary: #000000;
+      --background-secondary: #111111;
+      --border-color: #333333;
+      --shadow: 0 4px 12px rgba(0,0,0,0.5);
+      --shadow-hover: 0 8px 25px rgba(255,215,0,0.3);
+      --glow: 0 0 20px rgba(255,215,0,0.3);
+      --radius: 8px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, var(--background-primary), var(--background-secondary));
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Animated background particles */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image: 
+        radial-gradient(circle at 20% 80%, rgba(255, 215, 0, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(255, 215, 0, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(255, 215, 0, 0.06) 0%, transparent 50%);
+      animation: float 25s ease-in-out infinite;
+      z-index: -1;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      33% { transform: translateY(-15px) rotate(0.5deg); }
+      66% { transform: translateY(8px) rotate(-0.5deg); }
+    }
+
+    .navbar {
+      background: var(--background-secondary);
+      border-bottom: 2px solid var(--primary-color);
+      padding: 0 20px;
+      height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .navbar h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--primary-color);
+      text-shadow: var(--glow);
+    }
+
+    .navbar h1::before {
+      content: '🏆';
+      margin-right: 8px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+
+    .navbar-right {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .user-info {
+      color: var(--text-secondary);
+      font-size: 14px;
+      padding: 8px 16px;
+      background: var(--accent-color);
+      border-radius: var(--radius);
+      border: 1px solid var(--border-color);
+    }
+
+    .content {
+      padding: 30px;
+      max-width: 1200px;
+      margin: 0 auto;
+      animation: fadeIn 0.8s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .page-header {
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      padding: 30px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 30px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .page-header:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow-hover);
+    }
+
+    .page-title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--primary-color);
+      text-shadow: var(--glow);
+      margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+      color: var(--text-secondary);
+      font-size: 16px;
+    }
+
+    .card {
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 25px;
+      margin-bottom: 25px;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .card:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-2px);
+    }
+
+    .card h2 {
+      color: var(--primary-color);
+      margin-bottom: 20px;
+      font-size: 24px;
+      font-weight: 600;
+      text-shadow: var(--glow);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 14px 18px;
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      font-size: 16px;
+      background: var(--background-primary);
+      color: var(--text-primary);
+      transition: all 0.3s ease;
+    }
+
+    input::placeholder {
+      color: var(--text-muted);
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: var(--glow);
+      background: var(--background-secondary);
+      transform: translateY(-2px);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      gap: 8px;
+      min-height: 48px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color), #e6c200);
+      color: var(--background-primary);
+      border: 2px solid var(--primary-color);
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.5s;
+    }
+
+    .btn-primary:hover::before {
+      left: 100%;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-3px);
+    }
+
+    .btn-secondary {
+      background: var(--background-primary);
+      color: var(--text-primary);
+      border: 2px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--accent-color);
+      border-color: var(--primary-color);
+      box-shadow: var(--glow);
+      transform: translateY(-2px);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--danger-color), #a82800);
+      color: white;
+      border: 2px solid var(--danger-color);
+    }
+
+    .btn-danger:hover {
+      background: linear-gradient(135deg, #ff4444, var(--danger-color));
+      box-shadow: 0 8px 25px rgba(204, 0, 0, 0.3);
+      transform: translateY(-3px);
+    }
+
+    .projects-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .projects-table th {
+      background: var(--accent-color);
+      color: var(--primary-color);
+      padding: 16px 20px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    .projects-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+
+    .projects-table tr:hover {
+      background: var(--accent-color);
+      transform: scale(1.01);
+      transition: all 0.2s ease;
+    }
+
+    .project-name {
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: 16px;
+    }
+
+    .project-key {
+      background: var(--primary-color);
+      color: var(--background-primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 12px;
+      display: inline-block;
+    }
+
+    .action-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .action-links a {
+      color: var(--primary-color);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      padding: 6px 12px;
+      border: 1px solid var(--primary-color);
+      border-radius: 4px;
+      transition: all 0.3s ease;
+      background: transparent;
+    }
+
+    .action-links a:hover {
+      background: var(--primary-color);
+      color: var(--background-primary);
+      box-shadow: var(--glow);
+      transform: translateY(-2px);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state h3 {
+      margin-bottom: 16px;
+      color: var(--text-primary);
+      font-size: 24px;
+    }
+
+    .empty-state p {
+      font-size: 16px;
+      margin-bottom: 24px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-secondary);
+    }
+
+    .spinner {
+      border: 3px solid var(--accent-color);
+      border-top: 3px solid var(--primary-color);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .message {
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      font-weight: 500;
+      border: 2px solid;
+      backdrop-filter: blur(10px);
+    }
+
+    .message-error {
+      background: rgba(204, 0, 0, 0.1);
+      color: #ffcccc;
+      border-color: var(--danger-color);
+      box-shadow: 0 0 15px rgba(204, 0, 0, 0.3);
+    }
+
+    .message-success {
+      background: rgba(0, 204, 0, 0.1);
+      color: #ccffcc;
+      border-color: var(--success-color);
+      box-shadow: 0 0 15px rgba(0, 204, 0, 0.3);
+    }
+
+    @media (max-width: 768px) {
+      .navbar {
+        padding: 0 15px;
+        flex-direction: column;
+        height: auto;
+        padding: 15px;
+      }
+      
+      .navbar-right {
+        margin-top: 10px;
+        width: 100%;
+        justify-content: space-between;
+      }
+      
+      .content {
+        padding: 20px;
+      }
+      
+      .form-row {
+        flex-direction: column;
+      }
+      
+      .projects-table {
+        font-size: 14px;
+      }
+      
+      .projects-table th,
+      .projects-table td {
+        padding: 12px 15px;
+      }
+      
+      .action-links {
+        flex-direction: column;
+      }
+      
+      .action-links a {
+        text-align: center;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .page-title {
+        font-size: 24px;
+      }
+      
+      .card {
+        padding: 20px;
+      }
+      
+      .projects-table th,
+      .projects-table td {
+        padding: 10px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <div class="navbar-brand">
+      <h1>Crowley App</h1>
+    </div>
+    <div class="navbar-right">
+      <span class="user-info" id="userInfo">Loading...</span>
+      <button class="btn btn-danger" id="logoutBtn">Logout</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="message"></div>
+    
+    <div class="page-header">
+      <h1 class="page-title">Project Dashboard</h1>
+      <p class="page-subtitle">Manage your projects and track progress</p>
+    </div>
+
+    <div class="card">
+      <h2>Create New Project</h2>
+      <form id="createProjectForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="projectName">Project Name *</label>
+            <input type="text" id="projectName" placeholder="Enter project name" required />
+          </div>
+          <div class="form-group">
+            <label for="projectKey">Project Key</label>
+            <input type="text" id="projectKey" placeholder="e.g., PROJ (auto-generated if empty)" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="createBtn">
+          <span class="spinner" style="display: none;"></span>
+          <span class="btn-text">✨ Create Project</span>
+        </button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Your Projects</h2>
+      <div id="projectsContainer">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Loading your projects...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="common.js"></script>
+  <script>
+    // Inline fallback functions
+    if (typeof requireAuth === 'undefined') {
+      function requireAuth() {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          window.location.href = '/index.html';
+          return false;
+        }
+        return true;
+      }
+      
+      function getCurrentUser() {
+        try {
+          const userStr = localStorage.getItem('user');
+          return userStr ? JSON.parse(userStr) : {};
+        } catch (err) {
+          return {};
+        }
+      }
+      
+      async function api(path, options = {}) {
+        const opts = {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          ...options
+        };
+
+        const token = localStorage.getItem('token');
+        if (token) {
+          opts.headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(path, opts);
+        
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/index.html';
+        }
+
+        return response;
+      }
+    }
+
+    requireAuth();
+
+    const currentUser = getCurrentUser();
+    document.getElementById('userInfo').textContent = `Welcome, ${currentUser.email}`;
+
+    function showMessage(text, type = 'error') {
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = `<div class="message message-${type}">${text}</div>`;
+      setTimeout(() => {
+        messageDiv.innerHTML = '';
+      }, 5000);
+    }
+
+    function setLoading(isLoading) {
+      const createBtn = document.getElementById('createBtn');
+      if (isLoading) {
+        createBtn.disabled = true;
+        createBtn.querySelector('.spinner').style.display = 'inline-block';
+        createBtn.querySelector('.btn-text').textContent = 'Creating...';
+      } else {
+        createBtn.disabled = false;
+        createBtn.querySelector('.spinner').style.display = 'none';
+        createBtn.querySelector('.btn-text').textContent = '✨ Create Project';
+      }
+    }
+
+    async function loadProjects() {
+      const container = document.getElementById('projectsContainer');
+      
+      try {
+        const response = await api('/api/projects', { method: 'GET' });
+        
+        if (!response.ok) {
+          throw new Error('Failed to load projects');
+        }
+        
+        const projects = await response.json();
+        
+        if (projects.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <h3>No Projects Yet</h3>
+              <p>Create your first project to get started with issue tracking!</p>
+            </div>
+          `;
+          return;
+        }
+
+        let tableHTML = `
+          <table class="projects-table">
+            <thead>
+              <tr>
+                <th>Project Name</th>
+                <th>Key</th>
+                <th>Owner</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        projects.forEach((project) => {
+          tableHTML += `
+            <tr>
+              <td><span class="project-name">${project.name}</span></td>
+              <td><span class="project-key">${project.key}</span></td>
+              <td>${project.ownerEmail || 'Unknown'}</td>
+              <td>
+                <div class="action-links">
+                  <a href="/board.html?projectId=${project.id}">📋 Board</a>
+                  <a href="/sprints.html?projectId=${project.id}">🏃 Sprints</a>
+                  <a href="/create-issue.html?projectId=${project.id}">➕ New Issue</a>
+                </div>
+              </td>
+            </tr>
+          `;
+        });
+
+        tableHTML += `
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = tableHTML;
+
+      } catch (err) {
+        console.error('Error loading projects:', err);
+        container.innerHTML = `
+          <div class="empty-state">
+            <h3>Error Loading Projects</h3>
+            <p>Failed to load projects. Please refresh the page or try again later.</p>
+            <button class="btn btn-primary" onclick="loadProjects()">🔄 Retry</button>
+          </div>
+        `;
+      }
+    }
+
+    document.getElementById('createProjectForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const name = document.getElementById('projectName').value.trim();
+      let key = document.getElementById('projectKey').value.trim();
+      
+      if (!name) {
+        showMessage('Project name is required');
+        return;
+      }
+
+      // Auto-generate key if empty
+      if (!key) {
+        key = name.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10);
+      }
+
+      setLoading(true);
+
+      try {
+        const response = await api('/api/projects', {
+          method: 'POST',
+          body: JSON.stringify({ name, key }),
+        });
+
+        const data = await response.json();
+        
+        if (response.ok) {
+          showMessage(`Project "${data.name}" created successfully!`, 'success');
+          document.getElementById('projectName').value = '';
+          document.getElementById('projectKey').value = '';
+          loadProjects();
+        } else {
+          showMessage(data.error || 'Failed to create project');
+        }
+      } catch (err) {
+        console.error('Error creating project:', err);
+        showMessage('Failed to create project. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      if (confirm('Are you sure you want to logout?')) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        showMessage('Logging out...', 'success');
+        setTimeout(() => {
+          window.location.href = '/index.html';
+        }, 1000);
+      }
+    });
+
+    // Initialize
+    loadProjects();
+  </script>
+</body>
+</html>

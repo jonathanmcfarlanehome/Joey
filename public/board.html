@@ -2,107 +2,1200 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Jira‑lite – Board</title>
+  <title>Crowley App – Board</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
+    :root {
+      --primary-color: #ffd700;
+      --primary-hover: #ffed4e;
+      --secondary-color: #1a1a1a;
+      --accent-color: #333333;
+      --success-color: #00cc00;
+      --warning-color: #ff8800;
+      --danger-color: #cc0000;
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+      --text-muted: #888888;
+      --background-primary: #000000;
+      --background-secondary: #111111;
+      --border-color: #333333;
+      --shadow: 0 4px 12px rgba(0,0,0,0.5);
+      --shadow-hover: 0 8px 25px rgba(255,215,0,0.3);
+      --glow: 0 0 20px rgba(255,215,0,0.3);
+      --radius: 8px;
+      --sidebar-width: 240px;
+    }
+
+    * {
       margin: 0;
-      padding: 1rem;
-      background: #f5f5f5;
+      padding: 0;
+      box-sizing: border-box;
     }
-    h1 {
-      margin-bottom: 1rem;
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, var(--background-primary), var(--background-secondary));
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
     }
-    #board {
+
+    /* Animated background particles */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image: 
+        radial-gradient(circle at 15% 85%, rgba(255, 215, 0, 0.06) 0%, transparent 50%),
+        radial-gradient(circle at 85% 15%, rgba(255, 215, 0, 0.04) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+      animation: float 30s ease-in-out infinite;
+      z-index: -1;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      33% { transform: translateY(-12px) rotate(0.3deg); }
+      66% { transform: translateY(6px) rotate(-0.3deg); }
+    }
+
+    .navbar {
+      background: var(--background-secondary);
+      border-bottom: 2px solid var(--primary-color);
+      color: var(--text-primary);
+      padding: 0 20px;
+      height: 70px;
       display: flex;
-      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(15px);
     }
+
+    .navbar h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--primary-color);
+      text-shadow: var(--glow);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .navbar h1::before {
+      content: '🏆';
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+
+    .navbar-right {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .user-info {
+      color: var(--text-secondary);
+      font-size: 14px;
+      padding: 8px 16px;
+      background: var(--accent-color);
+      border-radius: var(--radius);
+      border: 1px solid var(--border-color);
+    }
+
+    .content {
+      padding: 20px;
+      overflow-x: auto;
+      animation: fadeIn 0.8s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .board-header {
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      padding: 25px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .board-header:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow-hover);
+    }
+
+    .board-title {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--primary-color);
+      text-shadow: var(--glow);
+    }
+
+    .board-nav {
+      display: flex;
+      gap: 12px;
+    }
+
+    .board {
+      display: flex;
+      gap: 25px;
+      min-height: 600px;
+      overflow-x: auto;
+      padding: 20px 0;
+      scroll-behavior: smooth;
+    }
+
+    .board::-webkit-scrollbar {
+      height: 8px;
+    }
+
+    .board::-webkit-scrollbar-track {
+      background: var(--background-secondary);
+      border-radius: 4px;
+    }
+
+    .board::-webkit-scrollbar-thumb {
+      background: var(--primary-color);
+      border-radius: 4px;
+    }
+
+    .board::-webkit-scrollbar-thumb:hover {
+      background: var(--primary-hover);
+    }
+
     .column {
-      background: #fff;
-      border: 1px solid #ccc;
-      margin-right: 1rem;
-      padding: 0.5rem;
+      min-width: 350px;
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 20px;
+      height: fit-content;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+      box-shadow: var(--shadow);
+    }
+
+    .column:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-3px);
+    }
+
+    .column.drag-over {
+      border-color: var(--primary-color);
+      background: rgba(255, 215, 0, 0.08);
+      box-shadow: var(--glow);
+      transform: scale(1.02);
+    }
+
+    .column-header {
+      margin-bottom: 20px;
+      padding: 16px 20px;
+      background: var(--accent-color);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      text-align: center;
+      box-shadow: var(--shadow);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+
+    .column-header:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--glow);
+    }
+
+    .column-title {
+      font-size: 16px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--primary-color);
+      text-shadow: var(--glow);
+    }
+
+    .issue-count {
+      background: linear-gradient(135deg, var(--primary-color), #e6c200);
+      color: var(--background-primary);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 700;
+      min-width: 28px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+    }
+
+    .issue-card {
+      background: var(--background-primary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      border-left: 5px solid var(--primary-color);
+      cursor: grab;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .issue-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .issue-card:hover::before {
+      opacity: 1;
+    }
+
+    .issue-card:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-5px) scale(1.02);
+      background: var(--background-secondary);
+    }
+
+    .issue-card.dragging {
+      opacity: 0.7;
+      cursor: grabbing;
+      transform: rotate(3deg) scale(1.05);
+      box-shadow: 0 15px 35px rgba(255, 215, 0, 0.4);
+      z-index: 1000;
+    }
+
+    .issue-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .issue-card h4 {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1.3;
       flex: 1;
-      min-width: 200px;
+      margin-right: 12px;
     }
-    .card {
-      border: 1px solid #999;
-      background: #fafafa;
-      margin-bottom: 0.5rem;
-      padding: 0.5rem;
+
+    .issue-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
     }
-    select {
+
+    .issue-card:hover .issue-actions {
+      opacity: 1;
+    }
+
+    .issue-action-btn {
+      background: var(--accent-color);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .issue-action-btn:hover {
+      background: var(--primary-color);
+      color: var(--background-primary);
+      border-color: var(--primary-color);
+    }
+
+    .issue-action-btn.delete {
+      background: var(--danger-color);
+      border-color: var(--danger-color);
+      color: white;
+    }
+
+    .issue-action-btn.delete:hover {
+      background: #ff4444;
+      box-shadow: 0 0 10px rgba(204, 0, 0, 0.3);
+    }
+
+    .issue-card p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 16px;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .issue-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .priority-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 2px solid;
+    }
+
+    .priority-high {
+      background: rgba(204, 0, 0, 0.15);
+      color: #ff6666;
+      border-color: var(--danger-color);
+      box-shadow: 0 0 10px rgba(204, 0, 0, 0.3);
+    }
+
+    .priority-medium {
+      background: rgba(255, 136, 0, 0.15);
+      color: #ffaa44;
+      border-color: var(--warning-color);
+      box-shadow: 0 0 10px rgba(255, 136, 0, 0.3);
+    }
+
+    .priority-low {
+      background: rgba(0, 204, 0, 0.15);
+      color: #66ff66;
+      border-color: var(--success-color);
+      box-shadow: 0 0 10px rgba(0, 204, 0, 0.3);
+    }
+
+    .issue-id {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+      background: var(--accent-color);
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
       width: 100%;
-      margin-top: 0.5rem;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.5s;
+    }
+
+    .btn:hover::before {
+      left: 100%;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color), #e6c200);
+      color: var(--background-primary);
+      border: 2px solid var(--primary-color);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: var(--background-primary);
+      color: var(--text-primary);
+      border: 2px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--accent-color);
+      border-color: var(--primary-color);
+      box-shadow: var(--glow);
+      transform: translateY(-2px);
+    }
+
+    .btn-sm {
+      padding: 8px 16px;
+      font-size: 12px;
+    }
+
+    .drop-zone {
+      min-height: 120px;
+      border: 3px dashed var(--border-color);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 15px;
+      transition: all 0.3s ease;
+      background: var(--background-primary);
+    }
+
+    .drop-zone.active,
+    .drop-zone:hover {
+      border-color: var(--primary-color);
+      background: rgba(255, 215, 0, 0.05);
+      color: var(--primary-color);
+      box-shadow: var(--glow);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: var(--text-secondary);
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      margin: 20px;
+    }
+
+    .spinner {
+      border: 4px solid var(--accent-color);
+      border-top: 4px solid var(--primary-color);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .message {
+      padding: 18px 24px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      font-weight: 600;
+      border: 2px solid;
+      backdrop-filter: blur(10px);
+      animation: slideIn 0.5s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message-error {
+      background: rgba(204, 0, 0, 0.1);
+      color: #ffcccc;
+      border-color: var(--danger-color);
+      box-shadow: 0 0 20px rgba(204, 0, 0, 0.3);
+    }
+
+    .message-success {
+      background: rgba(0, 204, 0, 0.1);
+      color: #ccffcc;
+      border-color: var(--success-color);
+      box-shadow: 0 0 20px rgba(0, 204, 0, 0.3);
+    }
+
+    /* Enhanced Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      animation: modalFadeIn 0.3s ease-out;
+    }
+
+    .modal.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @keyframes modalFadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    .modal-content {
+      background: var(--background-secondary);
+      border: 2px solid var(--danger-color);
+      border-radius: var(--radius);
+      padding: 30px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(204, 0, 0, 0.3);
+      animation: modalSlideIn 0.3s ease-out;
+      position: relative;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        transform: translateY(-50px) scale(0.9);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h3 {
+      color: var(--danger-color);
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .modal-header::before {
+      content: '⚠️';
+      font-size: 28px;
+    }
+
+    .modal-body {
+      margin-bottom: 25px;
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    .modal-body p {
+      margin-bottom: 15px;
+    }
+
+    .modal-body strong {
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+
+    .warning-box {
+      background: rgba(204, 0, 0, 0.1);
+      border: 2px solid var(--danger-color);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 15px 0;
+      color: #ffcccc;
+    }
+
+    .warning-box::before {
+      content: '🚨 ';
+      font-size: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 15px;
+      justify-content: flex-end;
+    }
+
+    /* Status-specific column styling */
+    .column[data-status="To Do"] .column-header {
+      background: linear-gradient(135deg, #333, #444);
+    }
+
+    .column[data-status="In Progress"] .column-header {
+      background: linear-gradient(135deg, #444, #555);
+    }
+
+    .column[data-status="Done"] .column-header {
+      background: linear-gradient(135deg, #1a4a1a, #2a5a2a);
+    }
+
+    @media (max-width: 1200px) {
+      .column {
+        min-width: 320px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .navbar {
+        padding: 0 15px;
+        height: 60px;
+      }
+      
+      .navbar h1 {
+        font-size: 24px;
+      }
+      
+      .content {
+        padding: 15px;
+      }
+      
+      .board {
+        flex-direction: column;
+        gap: 20px;
+      }
+      
+      .column {
+        min-width: 100%;
+      }
+      
+      .board-header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+      }
+      
+      .board-nav {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .issue-card {
+        padding: 16px;
+      }
+
+      .issue-card h4 {
+        font-size: 16px;
+      }
+
+      .modal-content {
+        margin: 20px;
+        padding: 25px;
+      }
+
+      .modal-actions {
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .board-title {
+        font-size: 24px;
+      }
+      
+      .column-title {
+        font-size: 14px;
+      }
+      
+      .issue-card {
+        padding: 14px;
+      }
     }
   </style>
 </head>
 <body>
-  <h1 id="title">Board</h1>
-  <div id="board"></div>
-  <script src="common.js"></script>
+  <div class="navbar">
+    <h1>Crowley App</h1>
+    <div class="navbar-right">
+      <span class="user-info" id="userInfo">Loading...</span>
+      <a href="/projects.html" class="btn btn-secondary btn-sm">← Back to Projects</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="message"></div>
+    
+    <div class="board-header">
+      <h1 class="board-title" id="boardTitle">Project Board</h1>
+      <div class="board-nav">
+        <a href="#" class="btn btn-secondary btn-sm" id="backlogLink">📋 Backlog</a>
+        <a href="#" class="btn btn-secondary btn-sm" id="sprintsLink">🏃 Sprints</a>
+        <a href="#" class="btn btn-primary btn-sm" id="createIssueLink">➕ New Issue</a>
+      </div>
+    </div>
+
+    <div id="loadingIndicator" class="loading">
+      <div class="spinner"></div>
+      <p>Loading your board...</p>
+    </div>
+
+    <div id="board" class="board" style="display: none;"></div>
+  </div>
+
+  <!-- Delete Issue Confirmation Modal -->
+  <div id="deleteIssueModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Delete Issue</h3>
+      </div>
+      <div class="modal-body">
+        <p>You are about to <strong>permanently delete</strong> the issue:</p>
+        <p><strong id="deleteIssueTitle"></strong></p>
+        
+        <div class="warning-box">
+          This action will permanently delete:
+          <ul style="margin: 10px 0 0 20px;">
+            <li>The issue and all its content</li>
+            <li>All attached files and comments</li>
+            <li>All issue history and metadata</li>
+          </ul>
+          <strong>This action cannot be undone!</strong>
+        </div>
+
+        <p>Are you sure you want to proceed?</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="cancelDeleteIssueBtn">Cancel</button>
+        <button class="btn btn-danger" id="confirmDeleteIssueBtn">
+          <span class="spinner" style="display: none; width: 16px; height: 16px; margin: 0;"></span>
+          <span class="btn-text">🗑️ Delete Issue</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // Inline fallback functions
+    function getToken() {
+      try {
+        return localStorage.getItem('token');
+      } catch (err) {
+        console.error('Error reading token from localStorage:', err);
+        return null;
+      }
+    }
+
+    function getCurrentUser() {
+      try {
+        const userStr = localStorage.getItem('user');
+        return userStr ? JSON.parse(userStr) : {};
+      } catch (err) {
+        console.error('Error reading user from localStorage:', err);
+        return {};
+      }
+    }
+
+    function requireAuth() {
+      const token = getToken();
+      if (!token) {
+        console.log('No token found, redirecting to login');
+        window.location.href = '/index.html';
+        return false;
+      }
+      return true;
+    }
+
+    async function api(path, options = {}) {
+      const opts = {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      };
+
+      const token = getToken();
+      if (token) {
+        opts.headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(path, opts);
+      
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/index.html';
+      }
+
+      return response;
+    }
+
     requireAuth();
+
+    const currentUser = getCurrentUser();
+    document.getElementById('userInfo').textContent = `${currentUser.email}`;
+
     const params = new URLSearchParams(window.location.search);
     const projectId = params.get('projectId');
     const sprintId = params.get('sprintId');
-    async function loadBoard() {
-      try {
-        // fetch workflow
-        const wfRes = await api('/api/projects/' + projectId + '/workflow', { method: 'GET' });
-        const workflow = await wfRes.json();
-        // fetch board
-        const boardRes = await api('/api/projects/' + projectId + '/board' + (sprintId ? '?sprintId=' + sprintId : ''), { method: 'GET' });
-        const board = await boardRes.json();
-        const container = document.getElementById('board');
-        container.innerHTML = '';
-        workflow.statuses.forEach((status) => {
-          const col = document.createElement('div');
-          col.className = 'column';
-          const titleEl = document.createElement('h3');
-          titleEl.innerText = status;
-          col.appendChild(titleEl);
-          const issues = board[status] || [];
-          issues.forEach((issue) => {
-            const card = document.createElement('div');
-            card.className = 'card';
-            const strong = document.createElement('strong');
-            strong.innerText = issue.title;
-            card.appendChild(strong);
-            const p = document.createElement('p');
-            p.innerText = issue.description || '';
-            card.appendChild(p);
-            const select = document.createElement('select');
-            workflow.statuses.forEach((s) => {
-              const opt = document.createElement('option');
-              opt.value = s;
-              opt.text = s;
-              if (s === issue.status) opt.selected = true;
-              select.appendChild(opt);
-            });
-            select.addEventListener('change', async () => {
-              const newStatus = select.value;
-              const res = await api('/api/issues/' + issue.id, {
-                method: 'PUT',
-                body: JSON.stringify({ status: newStatus }),
-              });
-              if (res.ok) {
-                loadBoard();
-              } else {
-                const data = await res.json();
-                alert(data.error || 'Failed to update status');
-              }
-            });
-            card.appendChild(select);
-            col.appendChild(card);
-          });
-          container.appendChild(col);
-        });
-      } catch (err) {
-        console.error(err);
+
+    let draggedElement = null;
+    let draggedIssue = null;
+    let issueToDelete = null;
+    let projectData = null;
+
+    // Set up navigation links
+    document.getElementById('backlogLink').href = `/backlog.html?projectId=${projectId}`;
+    document.getElementById('sprintsLink').href = `/sprints.html?projectId=${projectId}`;
+    document.getElementById('createIssueLink').href = `/create-issue.html?projectId=${projectId}`;
+
+    function showMessage(text, type = 'error') {
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = `<div class="message message-${type}">${text}</div>`;
+      setTimeout(() => {
+        messageDiv.innerHTML = '';
+      }, 5000);
+    }
+
+    function getPriorityClass(priority) {
+      switch (priority?.toLowerCase()) {
+        case 'high': return 'priority-high';
+        case 'low': return 'priority-low';
+        default: return 'priority-medium';
       }
     }
-    loadBoard();
+
+    function canDeleteIssue(issue) {
+      // Users can delete issues if they are:
+      // 1. Admin
+      // 2. Issue creator
+      // 3. Project owner
+      // 4. Issue assignee
+      return currentUser.role === 'admin' ||
+             currentUser.id === issue.creatorId ||
+             (projectData && projectData.ownerId === currentUser.id) ||
+             currentUser.id === issue.assignee;
+    }
+
+    function showDeleteIssueModal(issue) {
+      issueToDelete = issue;
+      document.getElementById('deleteIssueTitle').textContent = issue.title;
+      document.getElementById('deleteIssueModal').classList.add('show');
+    }
+
+    function hideDeleteIssueModal() {
+      document.getElementById('deleteIssueModal').classList.remove('show');
+      issueToDelete = null;
+    }
+
+    async function deleteIssue(issueId) {
+      const confirmBtn = document.getElementById('confirmDeleteIssueBtn');
+      
+      try {
+        confirmBtn.disabled = true;
+        confirmBtn.querySelector('.spinner').style.display = 'inline-block';
+        confirmBtn.querySelector('.btn-text').textContent = 'Deleting...';
+
+        const response = await api(`/api/issues/${issueId}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          hideDeleteIssueModal();
+          showMessage('🗑️ Issue deleted successfully!', 'success');
+          loadBoard();
+        } else {
+          const data = await response.json();
+          showMessage(data.error || 'Failed to delete issue');
+        }
+      } catch (err) {
+        console.error('Error deleting issue:', err);
+        showMessage('Failed to delete issue. Please try again.');
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.querySelector('.spinner').style.display = 'none';
+        confirmBtn.querySelector('.btn-text').textContent = '🗑️ Delete Issue';
+      }
+    }
+
+    function createIssueCard(issue) {
+      const card = document.createElement('div');
+      card.className = 'issue-card';
+      card.draggable = true;
+      card.dataset.issueId = issue.id;
+      card.dataset.currentStatus = issue.status;
+
+      // Truncate description for display
+      const description = issue.description ? 
+        (issue.description.length > 100 ? issue.description.substring(0, 100) + '...' : issue.description) : '';
+
+      // Check if user can delete this issue
+      const canDelete = canDeleteIssue(issue);
+
+      card.innerHTML = `
+        <div class="issue-card-header">
+          <h4>${issue.title}</h4>
+          <div class="issue-actions">
+            ${canDelete ? `<button class="issue-action-btn delete" onclick="showDeleteIssueModal(${JSON.stringify(issue).replace(/"/g, '&quot;')})">🗑️</button>` : ''}
+          </div>
+        </div>
+        ${description ? `<p>${description}</p>` : ''}
+        <div class="issue-meta">
+          <div>
+            <span class="priority-badge ${getPriorityClass(issue.priority)}">${issue.priority}</span>
+          </div>
+          <span class="issue-id">#${issue.id.substring(0, 8)}</span>
+        </div>
+      `;
+
+      // Drag and drop events
+      card.addEventListener('dragstart', (e) => {
+        draggedElement = card;
+        draggedIssue = issue;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', card.outerHTML);
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        draggedElement = null;
+        draggedIssue = null;
+      });
+
+      // Double-click to edit (placeholder for future enhancement)
+      card.addEventListener('dblclick', () => {
+        showMessage(`Double-clicked issue: ${issue.title}`, 'success');
+        // Future: Open issue edit modal
+      });
+
+      return card;
+    }
+
+    function setupDropZone(column, status) {
+      column.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        column.classList.add('drag-over');
+      });
+
+      column.addEventListener('dragleave', (e) => {
+        // Only remove drag-over if we're leaving the column entirely
+        if (!column.contains(e.relatedTarget)) {
+          column.classList.remove('drag-over');
+        }
+      });
+
+      column.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        column.classList.remove('drag-over');
+
+        if (!draggedIssue || draggedIssue.status === status) {
+          return;
+        }
+
+        // Visual feedback
+        const dropZone = column.querySelector('.drop-zone');
+        if (dropZone) {
+          dropZone.textContent = 'Updating...';
+          dropZone.style.borderColor = var('--primary-color');
+        }
+
+        try {
+          const response = await api(`/api/issues/${draggedIssue.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: status }),
+          });
+
+          if (response.ok) {
+            showMessage(`✅ Issue moved to ${status}`, 'success');
+            loadBoard();
+          } else {
+            const data = await response.json();
+            showMessage(data.error || 'Failed to update issue status');
+          }
+        } catch (err) {
+          console.error('Error updating issue:', err);
+          showMessage('Failed to update issue status');
+        }
+      });
+    }
+
+    async function loadBoard() {
+      const loadingIndicator = document.getElementById('loadingIndicator');
+      const boardContainer = document.getElementById('board');
+      
+      try {
+        loadingIndicator.style.display = 'block';
+        boardContainer.style.display = 'none';
+
+        // Fetch project info, workflow, and board data
+        const [projectsRes, workflowRes, boardRes] = await Promise.all([
+          api('/api/projects', { method: 'GET' }),
+          api(`/api/projects/${projectId}/workflow`, { method: 'GET' }),
+          api(`/api/projects/${projectId}/board${sprintId ? '?sprintId=' + sprintId : ''}`, { method: 'GET' })
+        ]);
+
+        if (!projectsRes.ok || !workflowRes.ok || !boardRes.ok) {
+          throw new Error('Failed to load board data');
+        }
+
+        const projects = await projectsRes.json();
+        const workflow = await workflowRes.json();
+        const board = await boardRes.json();
+
+        projectData = projects.find(p => p.id === projectId);
+        if (projectData) {
+          document.getElementById('boardTitle').textContent = 
+            `${projectData.name} Board${sprintId ? ' - Sprint' : ''}`;
+        }
+
+        // Clear and rebuild board
+        boardContainer.innerHTML = '';
+
+        workflow.statuses.forEach((status) => {
+          const column = document.createElement('div');
+          column.className = 'column';
+          column.dataset.status = status;
+
+          const issues = board[status] || [];
+          
+          const header = document.createElement('div');
+          header.className = 'column-header';
+          header.innerHTML = `
+            <span class="column-title">${status}</span>
+            <span class="issue-count">${issues.length}</span>
+          `;
+          column.appendChild(header);
+
+          // Add issues to column
+          issues.forEach((issue) => {
+            const card = createIssueCard(issue);
+            column.appendChild(card);
+          });
+
+          // Add drop zone if no issues
+          if (issues.length === 0) {
+            const dropZone = document.createElement('div');
+            dropZone.className = 'drop-zone';
+            dropZone.innerHTML = `
+              <div>
+                <div style="font-size: 24px; margin-bottom: 8px;">📋</div>
+                <div>Drop issues here</div>
+              </div>
+            `;
+            column.appendChild(dropZone);
+          }
+
+          setupDropZone(column, status);
+          boardContainer.appendChild(column);
+        });
+
+        loadingIndicator.style.display = 'none';
+        boardContainer.style.display = 'flex';
+
+        // Add smooth entrance animation
+        boardContainer.style.opacity = '0';
+        setTimeout(() => {
+          boardContainer.style.transition = 'opacity 0.5s ease';
+          boardContainer.style.opacity = '1';
+        }, 100);
+
+      } catch (err) {
+        console.error('Error loading board:', err);
+        showMessage('Failed to load board data. Please try refreshing the page.');
+        loadingIndicator.innerHTML = `
+          <div style="text-align: center;">
+            <h3>⚠️ Error Loading Board</h3>
+            <p>Failed to load board data. Please try again.</p>
+            <button class="btn btn-primary" onclick="loadBoard()" style="margin-top: 15px;">🔄 Retry</button>
+          </div>
+        `;
+      }
+    }
+
+    // Delete modal functionality
+    document.getElementById('cancelDeleteIssueBtn').addEventListener('click', hideDeleteIssueModal);
+
+    document.getElementById('confirmDeleteIssueBtn').addEventListener('click', () => {
+      if (issueToDelete) {
+        deleteIssue(issueToDelete.id);
+      }
+    });
+
+    // Close modal when clicking outside
+    document.getElementById('deleteIssueModal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        hideDeleteIssueModal();
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Escape key to close modal
+      if (e.key === 'Escape') {
+        hideDeleteIssueModal();
+      }
+      
+      // Ctrl/Cmd + R to refresh board
+      if (e.key === 'r' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        loadBoard();
+        showMessage('Board refreshed!', 'success');
+      }
+    });
+
+    // Global functions for onclick handlers
+    window.showDeleteIssueModal = showDeleteIssueModal;
+
+    // Initialize board
+    if (!projectId) {
+      showMessage('No project specified');
+    } else {
+      loadBoard();
+    }
+
+    // Auto-refresh board every 45 seconds
+    setInterval(loadBoard, 45000);
   </script>
 </body>
 </html>

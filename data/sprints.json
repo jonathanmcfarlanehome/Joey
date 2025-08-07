@@ -4,9 +4,19 @@
     "projectId": "c4b93f756890e120",
     "name": "Sprint 1",
     "startDate": "2025-08-04T13:59:11.742Z",
-    "endDate": null,
-    "status": "active",
+    "endDate": "2025-08-04T22:46:01.249Z",
+    "status": "closed",
     "createdAt": "2025-08-04T13:58:58.918Z",
+    "closedAt": "2025-08-04T22:46:01.249Z"
+  },
+  {
+    "id": "b5c271d0a585a21a",
+    "projectId": "89d6b58fb38f5597",
+    "name": "Toro Graphix -Summer",
+    "startDate": "2025-06-01",
+    "endDate": "2025-09-01",
+    "status": "active",
+    "createdAt": "2025-08-04T22:36:01.546Z",
     "closedAt": null
   }
 ]

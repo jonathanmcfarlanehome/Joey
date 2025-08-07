@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Crowley App – Create Issue</title>
+  <style>
+    :root {
+      --primary-color: #ffd700;
+      --primary-hover: #ffed4e;
+      --secondary-color: #1a1a1a;
+      --accent-color: #333333;
+      --success-color: #00cc00;
+      --warning-color: #ff8800;
+      --danger-color: #cc0000;
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+      --text-muted: #888888;
+      --background-primary: #000000;
+      --background-secondary: #111111;
+      --border-color: #333333;
+      --shadow: 0 4px 12px rgba(0,0,0,0.5);
+      --shadow-hover: 0 8px 25px rgba(255,215,0,0.3);
+      --glow: 0 0 20px rgba(255,215,0,0.3);
+      --radius: 8px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, var(--background-primary), var(--background-secondary));
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .navbar {
+      background: var(--background-secondary);
+      border-bottom: 2px solid var(--primary-color);
+      color: var(--text-primary);
+      padding: 0 20px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .navbar h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--primary-color);
+      text-shadow: var(--glow);
+    }
+
+    .navbar-right {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .user-info {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .content {
+      padding: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      padding: 20px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .page-title {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--primary-color);
+      text-shadow: var(--glow);
+    }
+
+    .page-subtitle {
+      color: var(--text-secondary);
+      margin-top: 8px;
+      font-size: 16px;
+    }
+
+    .card {
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 30px;
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .required::after {
+      content: " *";
+      color: var(--danger-color);
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="date"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      font-size: 16px;
+      background: var(--background-primary);
+      color: var(--text-primary);
+      transition: all 0.3s ease;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: var(--glow);
+      background: var(--background-secondary);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 20px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      gap: 8px;
+      min-height: 48px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color), #e6c200);
+      color: var(--background-primary);
+      border: 2px solid var(--primary-color);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-2px);
+    }
+
+    .btn-primary:disabled {
+      background: var(--accent-color);
+      color: var(--text-muted);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-secondary {
+      background: var(--background-primary);
+      color: var(--text-primary);
+      border: 2px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--accent-color);
+      border-color: var(--primary-color);
+      box-shadow: var(--glow);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .message {
+      padding: 16px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      font-weight: 500;
+      border: 2px solid;
+    }
+
+    .message-error {
+      background: rgba(204, 0, 0, 0.1);
+      color: #ffcccc;
+      border-color: var(--danger-color);
+    }
+
+    .message-success {
+      background: rgba(0, 204, 0, 0.1);
+      color: #ccffcc;
+      border-color: var(--success-color);
+    }
+
+    .file-upload {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+    }
+
+    .file-upload input[type="file"] {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+
+    .file-upload-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      border: 2px dashed var(--border-color);
+      border-radius: var(--radius);
+      background: var(--background-primary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      min-height: 80px;
+    }
+
+    .file-upload:hover .file-upload-label {
+      border-color: var(--primary-color);
+      background: rgba(255, 215, 0, 0.05);
+      color: var(--primary-color);
+    }
+
+    .file-list {
+      margin-top: 10px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--accent-color);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .file-remove {
+      background: var(--danger-color);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .loading .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--accent-color);
+      border-top: 2px solid var(--primary-color);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .loading .btn-text {
+      display: none;
+    }
+
+    .btn-text {
+      display: inline-block;
+    }
+
+    .help-text {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    @media (max-width: 768px) {
+      .navbar {
+        padding: 0 15px;
+      }
+      
+      .content {
+        padding: 15px;
+      }
+      
+      .form-row {
+        flex-direction: column;
+      }
+      
+      .btn-group {
+        flex-direction: column;
+      }
+      
+      .card {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <h1>🏆 Crowley App</h1>
+    <div class="navbar-right">
+      <span class="user-info" id="userInfo">Loading...</span>
+      <a href="/projects.html" class="btn btn-secondary">Back to Projects</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="message"></div>
+    
+    <div class="page-header">
+      <h1 class="page-title">Create New Issue</h1>
+      <p class="page-subtitle" id="projectName">Loading project...</p>
+    </div>
+
+    <div class="card">
+      <form id="createIssueForm" enctype="multipart/form-data">
+        <div class="form-group">
+          <label for="title" class="required">Issue Title</label>
+          <input type="text" id="title" name="title" placeholder="Enter a descriptive title for this issue" required />
+        </div>
+
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" placeholder="Provide detailed information about this issue..."></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="priority">Priority</label>
+            <select id="priority" name="priority">
+              <option value="Low">Low</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="assignee">Assignee</label>
+            <select id="assignee" name="assignee">
+              <option value="">Unassigned</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="dueDate">Due Date</label>
+            <input type="date" id="dueDate" name="dueDate" />
+          </div>
+
+          <div class="form-group">
+            <label for="sprint">Sprint</label>
+            <select id="sprint" name="sprintId">
+              <option value="">Backlog (No Sprint)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="labels">Labels</label>
+          <input type="text" id="labels" name="labels" placeholder="Enter labels separated by commas (e.g., bug, frontend, urgent)" />
+          <div class="help-text">Separate multiple labels with commas</div>
+        </div>
+
+        <div class="form-group">
+          <label for="files">Attachments</label>
+          <div class="file-upload">
+            <input type="file" id="files" name="files" multiple accept="image/*,.pdf,.doc,.docx,.txt,.csv,.zip" />
+            <div class="file-upload-label">
+              <span>📎 Click to upload files or drag and drop</span>
+            </div>
+          </div>
+          <div class="help-text">Supported formats: Images, PDF, Word documents, text files, CSV, ZIP (Max 10MB per file)</div>
+          <div id="fileList" class="file-list"></div>
+        </div>
+
+        <div class="btn-group">
+          <button type="submit" class="btn btn-primary" id="submitBtn">
+            <span class="spinner" style="display: none;"></span>
+            <span class="btn-text">Create Issue</span>
+          </button>
+          <a href="#" class="btn btn-secondary" id="cancelBtn">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Inline common functions to avoid loading issues
+    function getToken() {
+      try {
+        return localStorage.getItem('token');
+      } catch (err) {
+        console.error('Error reading token from localStorage:', err);
+        return null;
+      }
+    }
+
+    function getCurrentUser() {
+      try {
+        const userStr = localStorage.getItem('user');
+        return userStr ? JSON.parse(userStr) : {};
+      } catch (err) {
+        console.error('Error reading user from localStorage:', err);
+        return {};
+      }
+    }
+
+    function requireAuth() {
+      const token = getToken();
+      if (!token) {
+        console.log('No token found, redirecting to login');
+        window.location.href = '/index.html';
+        return false;
+      }
+      return true;
+    }
+
+    async function api(path, options = {}) {
+      const opts = {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      };
+
+      const token = getToken();
+      if (token) {
+        opts.headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      if (opts.body instanceof FormData) {
+        delete opts.headers['Content-Type'];
+      }
+
+      const response = await fetch(path, opts);
+      
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/index.html';
+      }
+
+      return response;
+    }
+
+    requireAuth();
+
+    const currentUser = getCurrentUser();
+    document.getElementById('userInfo').textContent = `${currentUser.email}`;
+
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get('projectId');
+
+    let selectedFiles = [];
+    let projectData = null;
+    let users = [];
+    let sprints = [];
+
+    function showMessage(text, type = 'error') {
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = `<div class="message message-${type}">${text}</div>`;
+      setTimeout(() => {
+        messageDiv.innerHTML = '';
+      }, 5000);
+    }
+
+    function setLoading(isLoading) {
+      const submitBtn = document.getElementById('submitBtn');
+      if (isLoading) {
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+        submitBtn.querySelector('.spinner').style.display = 'inline-block';
+        submitBtn.querySelector('.btn-text').style.display = 'none';
+      } else {
+        submitBtn.classList.remove('loading');
+        submitBtn.disabled = false;
+        submitBtn.querySelector('.spinner').style.display = 'none';
+        submitBtn.querySelector('.btn-text').style.display = 'inline-block';
+      }
+    }
+
+    function updateFileList() {
+      const fileList = document.getElementById('fileList');
+      fileList.innerHTML = '';
+
+      selectedFiles.forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        fileItem.innerHTML = `
+          <span>${file.name} (${formatFileSize(file.size)})</span>
+          <button type="button" class="file-remove" onclick="removeFile(${index})">Remove</button>
+        `;
+        fileList.appendChild(fileItem);
+      });
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    window.removeFile = function(index) {
+      selectedFiles.splice(index, 1);
+      updateFileList();
+    };
+
+    async function loadData() {
+      try {
+        if (!projectId) {
+          showMessage('No project specified');
+          return;
+        }
+
+        // Load project data
+        const [projectRes, usersRes, sprintsRes] = await Promise.all([
+          api(`/api/projects/${projectId}`),
+          api('/api/users'),
+          api(`/api/projects/${projectId}/sprints`)
+        ]);
+
+        if (projectRes.ok) {
+          projectData = await projectRes.json();
+          document.getElementById('projectName').textContent = `for ${projectData.name}`;
+        }
+
+        if (usersRes.ok) {
+          users = await usersRes.json();
+          const assigneeSelect = document.getElementById('assignee');
+          users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.email} (${user.role})`;
+            assigneeSelect.appendChild(option);
+          });
+        }
+
+        if (sprintsRes.ok) {
+          sprints = await sprintsRes.json();
+          const sprintSelect = document.getElementById('sprint');
+          sprints.forEach(sprint => {
+            if (sprint.status !== 'closed') {
+              const option = document.createElement('option');
+              option.value = sprint.id;
+              option.textContent = `${sprint.name} (${sprint.status})`;
+              sprintSelect.appendChild(option);
+            }
+          });
+        }
+
+      } catch (err) {
+        console.error('Error loading data:', err);
+        showMessage('Failed to load form data');
+      }
+    }
+
+    // File upload handling
+    document.getElementById('files').addEventListener('change', function(e) {
+      const newFiles = Array.from(e.target.files);
+      
+      // Validate file sizes
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      const invalidFiles = newFiles.filter(file => file.size > maxSize);
+      
+      if (invalidFiles.length > 0) {
+        showMessage(`Some files are too large. Maximum size is 10MB per file.`);
+        return;
+      }
+
+      selectedFiles = [...selectedFiles, ...newFiles];
+      updateFileList();
+      e.target.value = ''; // Reset input
+    });
+
+    // Drag and drop handling
+    const fileUpload = document.querySelector('.file-upload');
+    const fileLabel = document.querySelector('.file-upload-label');
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      fileUpload.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      fileUpload.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      fileUpload.addEventListener(eventName, unhighlight, false);
+    });
+
+    function highlight(e) {
+      fileLabel.style.borderColor = 'var(--primary-color)';
+      fileLabel.style.backgroundColor = 'rgba(255, 215, 0, 0.1)';
+    }
+
+    function unhighlight(e) {
+      fileLabel.style.borderColor = 'var(--border-color)';
+      fileLabel.style.backgroundColor = '';
+    }
+
+    fileUpload.addEventListener('drop', handleDrop, false);
+
+    function handleDrop(e) {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      
+      const newFiles = Array.from(files);
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      const invalidFiles = newFiles.filter(file => file.size > maxSize);
+      
+      if (invalidFiles.length > 0) {
+        showMessage(`Some files are too large. Maximum size is 10MB per file.`);
+        return;
+      }
+
+      selectedFiles = [...selectedFiles, ...newFiles];
+      updateFileList();
+    }
+
+    // Form submission
+    document.getElementById('createIssueForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const title = document.getElementById('title').value.trim();
+      const description = document.getElementById('description').value.trim();
+      const priority = document.getElementById('priority').value;
+      const assignee = document.getElementById('assignee').value || null;
+      const dueDate = document.getElementById('dueDate').value || null;
+      const sprintId = document.getElementById('sprint').value || null;
+      const labels = document.getElementById('labels').value.trim();
+
+      if (!title) {
+        showMessage('Issue title is required');
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const formData = new FormData();
+        formData.append('projectId', projectId);
+        formData.append('title', title);
+        formData.append('description', description);
+        formData.append('priority', priority);
+        if (assignee) formData.append('assignee', assignee);
+        if (dueDate) formData.append('dueDate', dueDate);
+        if (sprintId) formData.append('sprintId', sprintId);
+        if (labels) formData.append('labels', labels);
+
+        // Add files
+        selectedFiles.forEach(file => {
+          formData.append('files', file);
+        });
+
+        const response = await api('/api/issues', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const issue = await response.json();
+          showMessage('Issue created successfully!', 'success');
+          
+          // Redirect after a short delay
+          setTimeout(() => {
+            window.location.href = `/board.html?projectId=${projectId}`;
+          }, 1500);
+        } else {
+          const data = await response.json();
+          showMessage(data.error || 'Failed to create issue');
+        }
+      } catch (err) {
+        console.error('Error creating issue:', err);
+        showMessage('Failed to create issue. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    // Cancel button
+    document.getElementById('cancelBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.history.back();
+    });
+
+    // Initialize
+    loadData();
+  </script>
+</body>
+</html>

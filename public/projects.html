@@ -2,108 +2,1092 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Jira‑lite – Projects</title>
+  <title>Crowley App – Projects</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
+    :root {
+      --primary-color: #ffd700;
+      --primary-hover: #ffed4e;
+      --secondary-color: #1a1a1a;
+      --accent-color: #333333;
+      --success-color: #00cc00;
+      --warning-color: #ff8800;
+      --danger-color: #cc0000;
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+      --text-muted: #888888;
+      --background-primary: #000000;
+      --background-secondary: #111111;
+      --border-color: #333333;
+      --shadow: 0 4px 12px rgba(0,0,0,0.5);
+      --shadow-hover: 0 8px 25px rgba(255,215,0,0.3);
+      --glow: 0 0 20px rgba(255,215,0,0.3);
+      --radius: 8px;
+    }
+
+    * {
       margin: 0;
-      padding: 1rem;
-      background: #f5f5f5;
+      padding: 0;
+      box-sizing: border-box;
     }
-    h1 {
-      margin-bottom: 1rem;
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, var(--background-primary), var(--background-secondary));
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
     }
-    table {
-      border-collapse: collapse;
+
+    /* Animated background particles */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image: 
+        radial-gradient(circle at 20% 80%, rgba(255, 215, 0, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(255, 215, 0, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(255, 215, 0, 0.06) 0%, transparent 50%);
+      animation: float 25s ease-in-out infinite;
+      z-index: -1;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      33% { transform: translateY(-15px) rotate(0.5deg); }
+      66% { transform: translateY(8px) rotate(-0.5deg); }
+    }
+
+    .navbar {
+      background: var(--background-secondary);
+      border-bottom: 2px solid var(--primary-color);
+      padding: 0 20px;
+      height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .navbar h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--primary-color);
+      text-shadow: var(--glow);
+    }
+
+    .navbar h1::before {
+      content: '🏆';
+      margin-right: 8px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+
+    .navbar-right {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .user-info {
+      color: var(--text-secondary);
+      font-size: 14px;
+      padding: 8px 16px;
+      background: var(--accent-color);
+      border-radius: var(--radius);
+      border: 1px solid var(--border-color);
+    }
+
+    .admin-badge {
+      background: linear-gradient(135deg, var(--danger-color), #ff4444);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 15px rgba(204, 0, 0, 0.3);
+      animation: admin-glow 2s ease-in-out infinite;
+    }
+
+    @keyframes admin-glow {
+      0%, 100% { box-shadow: 0 0 15px rgba(204, 0, 0, 0.3); }
+      50% { box-shadow: 0 0 25px rgba(204, 0, 0, 0.5); }
+    }
+
+    .content {
+      padding: 30px;
+      max-width: 1200px;
+      margin: 0 auto;
+      animation: fadeIn 0.8s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .page-header {
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      padding: 30px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 30px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .page-header:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow-hover);
+    }
+
+    .page-title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--primary-color);
+      text-shadow: var(--glow);
+      margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+      color: var(--text-secondary);
+      font-size: 16px;
+    }
+
+    .card {
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 25px;
+      margin-bottom: 25px;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .card:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-2px);
+    }
+
+    .card h2 {
+      color: var(--primary-color);
+      margin-bottom: 20px;
+      font-size: 24px;
+      font-weight: 600;
+      text-shadow: var(--glow);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    textarea,
+    select {
       width: 100%;
-      margin-top: 1rem;
+      padding: 14px 18px;
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      font-size: 16px;
+      background: var(--background-primary);
+      color: var(--text-primary);
+      transition: all 0.3s ease;
     }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 0.5rem;
+
+    input::placeholder {
+      color: var(--text-muted);
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: var(--glow);
+      background: var(--background-secondary);
+      transform: translateY(-2px);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      gap: 8px;
+      min-height: 48px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color), #e6c200);
+      color: var(--background-primary);
+      border: 2px solid var(--primary-color);
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.5s;
+    }
+
+    .btn-primary:hover::before {
+      left: 100%;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-3px);
+    }
+
+    .btn-secondary {
+      background: var(--background-primary);
+      color: var(--text-primary);
+      border: 2px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--accent-color);
+      border-color: var(--primary-color);
+      box-shadow: var(--glow);
+      transform: translateY(-2px);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--danger-color), #a82800);
+      color: white;
+      border: 2px solid var(--danger-color);
+    }
+
+    .btn-danger:hover {
+      background: linear-gradient(135deg, #ff4444, var(--danger-color));
+      box-shadow: 0 8px 25px rgba(204, 0, 0, 0.3);
+      transform: translateY(-3px);
+    }
+
+    .btn-sm {
+      padding: 8px 16px;
+      font-size: 14px;
+      min-height: 36px;
+    }
+
+    .projects-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--background-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .projects-table th {
+      background: var(--accent-color);
+      color: var(--primary-color);
+      padding: 16px 20px;
       text-align: left;
+      font-weight: 600;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border-color);
     }
-    form {
-      background: #fff;
-      padding: 1rem;
-      border: 1px solid #ccc;
-      max-width: 400px;
-      margin-bottom: 1rem;
+
+    .projects-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-primary);
+      vertical-align: middle;
     }
-    input {
+
+    .projects-table tr:hover {
+      background: var(--accent-color);
+      transform: scale(1.01);
+      transition: all 0.2s ease;
+    }
+
+    .project-name {
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: 16px;
+    }
+
+    .project-key {
+      background: var(--primary-color);
+      color: var(--background-primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 12px;
+      display: inline-block;
+    }
+
+    .action-links {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .action-links a,
+    .action-links button {
+      color: var(--primary-color);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 12px;
+      padding: 6px 12px;
+      border: 1px solid var(--primary-color);
+      border-radius: 4px;
+      transition: all 0.3s ease;
+      background: transparent;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .action-links a:hover,
+    .action-links button:hover {
+      background: var(--primary-color);
+      color: var(--background-primary);
+      box-shadow: var(--glow);
+      transform: translateY(-2px);
+    }
+
+    .action-links .btn-danger {
+      color: var(--danger-color);
+      border-color: var(--danger-color);
+    }
+
+    .action-links .btn-danger:hover {
+      background: var(--danger-color);
+      color: white;
+      box-shadow: 0 0 15px rgba(204, 0, 0, 0.3);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state h3 {
+      margin-bottom: 16px;
+      color: var(--text-primary);
+      font-size: 24px;
+    }
+
+    .empty-state p {
+      font-size: 16px;
+      margin-bottom: 24px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-secondary);
+    }
+
+    .spinner {
+      border: 3px solid var(--accent-color);
+      border-top: 3px solid var(--primary-color);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .message {
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      font-weight: 500;
+      border: 2px solid;
+      backdrop-filter: blur(10px);
+    }
+
+    .message-error {
+      background: rgba(204, 0, 0, 0.1);
+      color: #ffcccc;
+      border-color: var(--danger-color);
+      box-shadow: 0 0 15px rgba(204, 0, 0, 0.3);
+    }
+
+    .message-success {
+      background: rgba(0, 204, 0, 0.1);
+      color: #ccffcc;
+      border-color: var(--success-color);
+      box-shadow: 0 0 15px rgba(0, 204, 0, 0.3);
+    }
+
+    /* Enhanced Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
       width: 100%;
-      padding: 0.5rem;
-      margin-bottom: 0.5rem;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      animation: modalFadeIn 0.3s ease-out;
     }
-    button {
-      padding: 0.5rem 1rem;
+
+    .modal.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .logout {
-      float: right;
+
+    @keyframes modalFadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    .modal-content {
+      background: var(--background-secondary);
+      border: 2px solid var(--danger-color);
+      border-radius: var(--radius);
+      padding: 30px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(204, 0, 0, 0.3);
+      animation: modalSlideIn 0.3s ease-out;
+      position: relative;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        transform: translateY(-50px) scale(0.9);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h3 {
+      color: var(--danger-color);
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .modal-header::before {
+      content: '⚠️';
+      font-size: 28px;
+    }
+
+    .modal-body {
+      margin-bottom: 25px;
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    .modal-body p {
+      margin-bottom: 15px;
+    }
+
+    .modal-body strong {
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+
+    .warning-box {
+      background: rgba(204, 0, 0, 0.1);
+      border: 2px solid var(--danger-color);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 15px 0;
+      color: #ffcccc;
+    }
+
+    .warning-box::before {
+      content: '🚨 ';
+      font-size: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 15px;
+      justify-content: flex-end;
+    }
+
+    .confirm-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid var(--danger-color);
+      border-radius: var(--radius);
+      background: var(--background-primary);
+      color: var(--text-primary);
+      font-size: 16px;
+      margin: 10px 0;
+    }
+
+    .confirm-input:focus {
+      outline: none;
+      box-shadow: 0 0 15px rgba(204, 0, 0, 0.3);
+    }
+
+    .confirm-input.valid {
+      border-color: var(--success-color);
+      box-shadow: 0 0 15px rgba(0, 204, 0, 0.3);
+    }
+
+    @media (max-width: 768px) {
+      .navbar {
+        padding: 0 15px;
+        flex-direction: column;
+        height: auto;
+        padding: 15px;
+      }
+      
+      .navbar-right {
+        margin-top: 10px;
+        width: 100%;
+        justify-content: space-between;
+      }
+      
+      .content {
+        padding: 20px;
+      }
+      
+      .form-row {
+        flex-direction: column;
+      }
+      
+      .projects-table {
+        font-size: 14px;
+        overflow-x: auto;
+      }
+      
+      .projects-table th,
+      .projects-table td {
+        padding: 12px 15px;
+      }
+      
+      .action-links {
+        flex-direction: column;
+      }
+      
+      .action-links a,
+      .action-links button {
+        text-align: center;
+        width: 100%;
+      }
+
+      .modal-content {
+        margin: 20px;
+        padding: 25px;
+      }
+
+      .modal-actions {
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .page-title {
+        font-size: 24px;
+      }
+      
+      .card {
+        padding: 20px;
+      }
+      
+      .projects-table th,
+      .projects-table td {
+        padding: 10px 12px;
+      }
     }
   </style>
 </head>
 <body>
-  <button class="logout" id="logoutBtn">Logout</button>
-  <h1>Projects</h1>
-  <form id="createProjectForm">
-    <h3>Create Project</h3>
-    <input type="text" id="projectName" placeholder="Project name" required />
-    <input type="text" id="projectKey" placeholder="Key (optional)" />
-    <button type="submit">Create</button>
-  </form>
-  <table id="projectsTable">
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Key</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-  <script src="common.js"></script>
+  <div class="navbar">
+    <div class="navbar-brand">
+      <h1>Crowley App</h1>
+    </div>
+    <div class="navbar-right">
+      <span class="user-info" id="userInfo">Loading...</span>
+      <button class="btn btn-danger" id="logoutBtn">Logout</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="message"></div>
+    
+    <div class="page-header">
+      <h1 class="page-title">Project Dashboard</h1>
+      <p class="page-subtitle">Manage your projects and track progress</p>
+    </div>
+
+    <div class="card">
+      <h2>Create New Project</h2>
+      <form id="createProjectForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="projectName">Project Name *</label>
+            <input type="text" id="projectName" placeholder="Enter project name" required />
+          </div>
+          <div class="form-group">
+            <label for="projectKey">Project Key</label>
+            <input type="text" id="projectKey" placeholder="e.g., PROJ (auto-generated if empty)" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="createBtn">
+          <span class="spinner" style="display: none;"></span>
+          <span class="btn-text">✨ Create Project</span>
+        </button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Your Projects</h2>
+      <div id="projectsContainer">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Loading your projects...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Delete Project</h3>
+      </div>
+      <div class="modal-body">
+        <p>You are about to <strong>permanently delete</strong> the project:</p>
+        <p><strong id="deleteProjectName"></strong></p>
+        
+        <div class="warning-box">
+          This action will permanently delete ALL data associated with this project, including:
+          <ul style="margin: 10px 0 0 20px;">
+            <li>All issues and their attachments</li>
+            <li>All sprints and sprint data</li>
+            <li>All project workflows</li>
+            <li>All project notifications</li>
+          </ul>
+        </div>
+
+        <p>To confirm this action, please type <strong>"DELETE"</strong> in the field below:</p>
+        <input type="text" id="confirmDeleteInput" class="confirm-input" placeholder="Type DELETE to confirm" autocomplete="off" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="cancelDeleteBtn">Cancel</button>
+        <button class="btn btn-danger" id="confirmDeleteBtn" disabled>
+          <span class="spinner" style="display: none; width: 16px; height: 16px; margin: 0;"></span>
+          <span class="btn-text">🗑️ Delete Project</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    requireAuth();
-    async function loadProjects() {
-      const response = await api('/api/projects', { method: 'GET' });
-      const projects = await response.json();
-      const tbody = document.querySelector('#projectsTable tbody');
-      tbody.innerHTML = '';
-      projects.forEach((p) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML =
-          '<td>' + p.name + '</td>' +
-          '<td>' + p.key + '</td>' +
-          '<td>' +
-          '<a href="/board.html?projectId=' + p.id + '">Board</a> | ' +
-          '<a href="/sprints.html?projectId=' + p.id + '">Sprints</a>' +
-          '</td>';
-        tbody.appendChild(tr);
-      });
+    // Inline common functions to avoid loading issues
+    function getToken() {
+      try {
+        return localStorage.getItem('token');
+      } catch (err) {
+        console.error('Error reading token from localStorage:', err);
+        return null;
+      }
     }
+
+    function getCurrentUser() {
+      try {
+        const userStr = localStorage.getItem('user');
+        return userStr ? JSON.parse(userStr) : {};
+      } catch (err) {
+        console.error('Error reading user from localStorage:', err);
+        return {};
+      }
+    }
+
+    function requireAuth() {
+      const token = getToken();
+      if (!token) {
+        console.log('No token found, redirecting to login');
+        window.location.href = '/index.html';
+        return false;
+      }
+      return true;
+    }
+
+    async function api(path, options = {}) {
+      const opts = {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      };
+
+      const token = getToken();
+      if (token) {
+        opts.headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(path, opts);
+      
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/index.html';
+      }
+
+      return response;
+    }
+
+    requireAuth();
+
+    const currentUser = getCurrentUser();
+    const userInfoElement = document.getElementById('userInfo');
+    
+    // Enhanced user info display with admin badge
+    if (currentUser.role === 'admin') {
+      userInfoElement.innerHTML = `Welcome, ${currentUser.email} <span class="admin-badge">Admin</span>`;
+    } else {
+      userInfoElement.textContent = `Welcome, ${currentUser.email}`;
+    }
+
+    let projectToDelete = null;
+
+    function showMessage(text, type = 'error') {
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = `<div class="message message-${type}">${text}</div>`;
+      setTimeout(() => {
+        messageDiv.innerHTML = '';
+      }, 5000);
+    }
+
+    function setLoading(isLoading) {
+      const createBtn = document.getElementById('createBtn');
+      if (isLoading) {
+        createBtn.disabled = true;
+        createBtn.querySelector('.spinner').style.display = 'inline-block';
+        createBtn.querySelector('.btn-text').textContent = 'Creating...';
+      } else {
+        createBtn.disabled = false;
+        createBtn.querySelector('.spinner').style.display = 'none';
+        createBtn.querySelector('.btn-text').textContent = '✨ Create Project';
+      }
+    }
+
+    function canDeleteProjects() {
+      return currentUser.role === 'admin';
+    }
+
+    function showDeleteModal(project) {
+      projectToDelete = project;
+      document.getElementById('deleteProjectName').textContent = project.name;
+      document.getElementById('confirmDeleteInput').value = '';
+      document.getElementById('confirmDeleteBtn').disabled = true;
+      document.getElementById('deleteModal').classList.add('show');
+      
+      // Focus on the input field
+      setTimeout(() => {
+        document.getElementById('confirmDeleteInput').focus();
+      }, 300);
+    }
+
+    function hideDeleteModal() {
+      document.getElementById('deleteModal').classList.remove('show');
+      projectToDelete = null;
+    }
+
+    async function deleteProject(projectId) {
+      const confirmBtn = document.getElementById('confirmDeleteBtn');
+      
+      try {
+        confirmBtn.disabled = true;
+        confirmBtn.querySelector('.spinner').style.display = 'inline-block';
+        confirmBtn.querySelector('.btn-text').textContent = 'Deleting...';
+
+        const response = await api(`/api/projects/${projectId}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          hideDeleteModal();
+          showMessage('🗑️ Project deleted successfully!', 'success');
+          loadProjects();
+        } else {
+          const data = await response.json();
+          showMessage(data.error || 'Failed to delete project');
+        }
+      } catch (err) {
+        console.error('Error deleting project:', err);
+        showMessage('Failed to delete project. Please try again.');
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.querySelector('.spinner').style.display = 'none';
+        confirmBtn.querySelector('.btn-text').textContent = '🗑️ Delete Project';
+      }
+    }
+
+    async function loadProjects() {
+      const container = document.getElementById('projectsContainer');
+      
+      try {
+        const response = await api('/api/projects', { method: 'GET' });
+        
+        if (!response.ok) {
+          throw new Error('Failed to load projects');
+        }
+        
+        const projects = await response.json();
+        
+        if (projects.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <h3>No Projects Yet</h3>
+              <p>Create your first project to get started with issue tracking!</p>
+            </div>
+          `;
+          return;
+        }
+
+        let tableHTML = `
+          <table class="projects-table">
+            <thead>
+              <tr>
+                <th>Project Name</th>
+                <th>Key</th>
+                <th>Owner</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        projects.forEach((project) => {
+          const canDelete = canDeleteProjects();
+          
+          tableHTML += `
+            <tr>
+              <td><span class="project-name">${project.name}</span></td>
+              <td><span class="project-key">${project.key}</span></td>
+              <td>${project.ownerEmail || 'Unknown'}</td>
+              <td>
+                <div class="action-links">
+                  <a href="/board.html?projectId=${project.id}">📋 Board</a>
+                  <a href="/sprints.html?projectId=${project.id}">🏃 Sprints</a>
+                  <a href="/create-issue.html?projectId=${project.id}">➕ New Issue</a>
+                  ${canDelete ? `<button class="btn-danger" onclick="showDeleteModal({id: '${project.id}', name: '${project.name.replace(/'/g, '\\\'')}'})">🗑️ Delete</button>` : ''}
+                </div>
+              </td>
+            </tr>
+          `;
+        });
+
+        tableHTML += `
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = tableHTML;
+
+      } catch (err) {
+        console.error('Error loading projects:', err);
+        container.innerHTML = `
+          <div class="empty-state">
+            <h3>Error Loading Projects</h3>
+            <p>Failed to load projects. Please refresh the page or try again later.</p>
+            <button class="btn btn-primary" onclick="loadProjects()">🔄 Retry</button>
+          </div>
+        `;
+      }
+    }
+
+    // Form submission
     document.getElementById('createProjectForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const name = document.getElementById('projectName').value;
-      const key = document.getElementById('projectKey').value;
-      const res = await api('/api/projects', {
-        method: 'POST',
-        body: JSON.stringify({ name, key }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        document.getElementById('projectName').value = '';
-        document.getElementById('projectKey').value = '';
-        loadProjects();
-      } else {
-        alert(data.error || 'Failed to create project');
+      
+      const name = document.getElementById('projectName').value.trim();
+      let key = document.getElementById('projectKey').value.trim();
+      
+      if (!name) {
+        showMessage('Project name is required');
+        return;
+      }
+
+      // Auto-generate key if empty
+      if (!key) {
+        key = name.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10);
+      }
+
+      setLoading(true);
+
+      try {
+        const response = await api('/api/projects', {
+          method: 'POST',
+          body: JSON.stringify({ name, key }),
+        });
+
+        const data = await response.json();
+        
+        if (response.ok) {
+          showMessage(`Project "${data.name}" created successfully!`, 'success');
+          document.getElementById('projectName').value = '';
+          document.getElementById('projectKey').value = '';
+          loadProjects();
+        } else {
+          showMessage(data.error || 'Failed to create project');
+        }
+      } catch (err) {
+        console.error('Error creating project:', err);
+        showMessage('Failed to create project. Please try again.');
+      } finally {
+        setLoading(false);
       }
     });
+
+    // Logout functionality
     document.getElementById('logoutBtn').addEventListener('click', () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/index.html';
+      if (confirm('Are you sure you want to logout?')) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        showMessage('Logging out...', 'success');
+        setTimeout(() => {
+          window.location.href = '/index.html';
+        }, 1000);
+      }
     });
+
+    // Delete modal functionality
+    document.getElementById('confirmDeleteInput').addEventListener('input', (e) => {
+      const confirmBtn = document.getElementById('confirmDeleteBtn');
+      const input = e.target;
+      
+      if (input.value === 'DELETE') {
+        confirmBtn.disabled = false;
+        input.classList.add('valid');
+      } else {
+        confirmBtn.disabled = true;
+        input.classList.remove('valid');
+      }
+    });
+
+    document.getElementById('confirmDeleteInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && e.target.value === 'DELETE') {
+        document.getElementById('confirmDeleteBtn').click();
+      }
+    });
+
+    document.getElementById('cancelDeleteBtn').addEventListener('click', hideDeleteModal);
+
+    document.getElementById('confirmDeleteBtn').addEventListener('click', () => {
+      if (projectToDelete && document.getElementById('confirmDeleteInput').value === 'DELETE') {
+        deleteProject(projectToDelete.id);
+      }
+    });
+
+    // Close modal when clicking outside
+    document.getElementById('deleteModal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        hideDeleteModal();
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Escape key to close modal
+      if (e.key === 'Escape') {
+        hideDeleteModal();
+      }
+      
+      // Ctrl/Cmd + R to refresh projects
+      if (e.key === 'r' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        loadProjects();
+        showMessage('Projects refreshed!', 'success');
+      }
+    });
+
+    // Make functions globally accessible
+    window.showDeleteModal = showDeleteModal;
+    window.hideDeleteModal = hideDeleteModal;
+    window.loadProjects = loadProjects;
+
+    // Initialize
     loadProjects();
   </script>
 </body>

@@ -1,117 +1,187 @@
+// Enhanced Crowley App server implementation with comprehensive delete functionality
+// This version includes admin-restricted deletion for projects and sprints,
+// plus enhanced issue deletion with proper permission checks.
+
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
-const publicDir = path.join(__dirname, 'public');
 
+// Check if formidable is installed
+let formidable;
+try {
+  formidable = require('formidable');
+} catch (err) {
+  console.warn('Formidable not installed. File uploads will not work. Run: npm install formidable');
+}
 
 /*
- * Simple Jira‑like backend
- *
- * This server implements a very small subset of Jira functionality
- * using only built‑in Node.js modules. It provides endpoints for
- * user registration and login, project management and basic issue
- * tracking. Data is persisted to JSON files in the `data` folder.
- *
- * Authentication is handled via random tokens stored in a sessions
- * file. Each API call requiring authentication must include an
- * `Authorization: Bearer <token>` header. Tokens never expire in
- * this simple implementation, but the sessions structure records the
- * creation timestamp should you wish to add expiry logic later.
+ * Crowley App - Modern Project Management System
+ * Enhanced backend with comprehensive delete functionality and admin controls
  */
 
-// Location of our JSON data files relative to this script.  Each file
-// holds an array or object that is deserialized on each request and
-// flushed back to disk when modified. Using synchronous file APIs
-// simplifies the code considerably at the cost of scalability.
+// Configuration
+const CONFIG = {
+  PORT: process.env.PORT || 3000,
+  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+  SESSION_CLEANUP_INTERVAL: 3600000, // 1 hour
+  SESSION_EXPIRY: 86400000 * 7, // 7 days
+};
+
+// Location of our JSON data files
 const DATA_DIR = path.join(__dirname, 'data');
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
-// Helper to read a JSON file and parse its contents. Throws if the
-// file cannot be read or parsed. Always returns either an array or
-// object.
+// Ensure directories exist
+[DATA_DIR, UPLOADS_DIR, PUBLIC_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
+// Helper to read a JSON file and parse its contents
 function readJson(fileName) {
-  const filePath = path.join(DATA_DIR, fileName);
-  const raw = fs.readFileSync(filePath, { encoding: 'utf8' });
-  return JSON.parse(raw || 'null') || null;
+  try {
+    const filePath = path.join(DATA_DIR, fileName);
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    const raw = fs.readFileSync(filePath, { encoding: 'utf8' });
+    return JSON.parse(raw || 'null');
+  } catch (err) {
+    console.error(`Error reading ${fileName}:`, err);
+    return null;
+  }
 }
 
-// Helper to write a JavaScript object back to disk as JSON. Uses
-// two‑space indentation for readability.
+// Helper to write a JavaScript object back to disk as JSON
 function writeJson(fileName, data) {
-  const filePath = path.join(DATA_DIR, fileName);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  try {
+    const filePath = path.join(DATA_DIR, fileName);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error(`Error writing ${fileName}:`, err);
+    throw err;
+  }
 }
 
-// Generate a unique identifier. We use 8 bytes of randomness which
-// yields a 16‑character hexadecimal string. Should be sufficient for
-// demo purposes.
+// Initialize data files if they don't exist
+function initializeDataFile(fileName, defaultData) {
+  const filePath = path.join(DATA_DIR, fileName);
+  if (!fs.existsSync(filePath)) {
+    writeJson(fileName, defaultData);
+  }
+}
+
+// Generate a unique identifier
 function generateId() {
   return crypto.randomBytes(8).toString('hex');
 }
 
-// Return a SHA256 hash of the supplied password. Storing raw
-// passwords is never acceptable, even in test code. SHA256 is not
-// ideal for password hashing (bcrypt/argon2 would be better) but
-// avoids pulling in external dependencies.
+// Return a SHA256 hash of the supplied password
 function hashPassword(password) {
   return crypto.createHash('sha256').update(password).digest('hex');
 }
 
-// List of valid user roles. Roles control access to certain API
-// operations. In this demo there are four: admin, project_manager,
-// developer and viewer. Viewer accounts can only read data.
+// List of valid user roles
 const VALID_ROLES = ['admin', 'project_manager', 'developer', 'viewer'];
 
-// Read sprints from disk. Sprints live in a standalone file because
-// they are associated with projects but have their own lifecycle.
+// Read/write functions for all data types
+function readUsers() {
+  return readJson('users.json') || [];
+}
+
+function writeUsers(users) {
+  writeJson('users.json', users);
+}
+
+function readProjects() {
+  return readJson('projects.json') || [];
+}
+
+function writeProjects(projects) {
+  writeJson('projects.json', projects);
+}
+
+function readIssues() {
+  return readJson('issues.json') || [];
+}
+
+function writeIssues(issues) {
+  writeJson('issues.json', issues);
+}
+
 function readSprints() {
-  try {
-    return readJson('sprints.json') || [];
-  } catch (err) {
-    return [];
-  }
+  return readJson('sprints.json') || [];
 }
 
 function writeSprints(sprints) {
   writeJson('sprints.json', sprints);
 }
 
-// Workflows define the allowed statuses for each project. Each entry
-// takes the shape { projectId, statuses: [String], transitions: Object }.
 function readWorkflows() {
-  try {
-    return readJson('workflows.json') || [];
-  } catch (err) {
-    return [];
-  }
+  return readJson('workflows.json') || [];
 }
 
 function writeWorkflows(workflows) {
   writeJson('workflows.json', workflows);
 }
 
-// Notifications are stored globally. Each notification has an id,
-// userId, message, read flag and timestamp.
 function readNotifications() {
-  try {
-    return readJson('notifications.json') || [];
-  } catch (err) {
-    return [];
-  }
+  return readJson('notifications.json') || [];
 }
 
 function writeNotifications(notifications) {
   writeJson('notifications.json', notifications);
 }
 
-// Create notifications for multiple users. Accepts an array of userIds
-// and a message string. Each user will receive an individual
-// notification entry. All notifications start unread.
+function readAttachments() {
+  return readJson('attachments.json') || [];
+}
+
+function writeAttachments(attachments) {
+  writeJson('attachments.json', attachments);
+}
+
+function readSessions() {
+  return readJson('sessions.json') || {};
+}
+
+function writeSessions(sessions) {
+  writeJson('sessions.json', sessions);
+}
+
+// Clean up expired sessions
+function cleanupSessions() {
+  const sessions = readSessions();
+  const now = Date.now();
+  let changed = false;
+  
+  for (const token in sessions) {
+    if (now - sessions[token].createdAt > CONFIG.SESSION_EXPIRY) {
+      delete sessions[token];
+      changed = true;
+    }
+  }
+  
+  if (changed) {
+    writeSessions(sessions);
+  }
+}
+
+// Schedule session cleanup
+setInterval(cleanupSessions, CONFIG.SESSION_CLEANUP_INTERVAL);
+
+// Create notifications for multiple users
 function sendNotification(userIds, message) {
   if (!Array.isArray(userIds) || userIds.length === 0) return;
+  
   const notifications = readNotifications();
-  for (const userId of userIds) {
+  const uniqueUserIds = [...new Set(userIds)];
+  
+  for (const userId of uniqueUserIds) {
     notifications.push({
       id: generateId(),
       userId,
@@ -120,16 +190,15 @@ function sendNotification(userIds, message) {
       createdAt: new Date().toISOString(),
     });
   }
+  
   writeNotifications(notifications);
 }
 
-// Helper to get or create a workflow for a project. If a workflow
-// doesn't exist for the supplied projectId, a default workflow
-// containing the classic "To Do", "In Progress" and "Done" statuses
-// is created and persisted. Transitions are left empty for now.
+// Helper to get or create a workflow for a project
 function ensureWorkflow(projectId) {
   let workflows = readWorkflows();
   let wf = workflows.find(w => w.projectId === projectId);
+  
   if (!wf) {
     wf = {
       projectId,
@@ -139,46 +208,36 @@ function ensureWorkflow(projectId) {
     workflows.push(wf);
     writeWorkflows(workflows);
   }
+  
   return wf;
 }
 
-// Read the current session map. The sessions object maps tokens to
-// objects of the form { userId, createdAt }. If the file does not
-// exist or cannot be parsed an empty object is returned.
-function readSessions() {
-  try {
-    return readJson('sessions.json') || {};
-  } catch (err) {
-    return {};
-  }
-}
-
-// Persist the session map back to disk.
-function writeSessions(sessions) {
-  writeJson('sessions.json', sessions);
-}
-
-// Authenticate a request by inspecting the Authorization header. If
-// valid, returns the user object corresponding to the token; else
-// returns null. You can augment this function to implement token
-// expiry by checking the createdAt timestamp.
+// Authenticate a request by inspecting the Authorization header
 function authenticate(req) {
   const authHeader = req.headers['authorization'];
   if (!authHeader) return null;
+  
   const token = authHeader.startsWith('Bearer ')
     ? authHeader.slice(7)
     : authHeader;
+    
   const sessions = readSessions();
   const sess = sessions[token];
   if (!sess) return null;
-  const users = readJson('users.json');
+  
+  // Check if session has expired
+  if (Date.now() - sess.createdAt > CONFIG.SESSION_EXPIRY) {
+    delete sessions[token];
+    writeSessions(sessions);
+    return null;
+  }
+  
+  const users = readUsers();
   const user = users.find(u => u.id === sess.userId);
   return user || null;
 }
 
-// Parse JSON body of a request. Returns a promise that resolves
-// with an object. Empty bodies resolve to an empty object. If
-// parsing fails the promise rejects.
+// Parse JSON body of a request
 function parseBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -194,1037 +253,385 @@ function parseBody(req) {
         reject(err);
       }
     });
+    req.on('error', reject);
   });
 }
 
-// Basic HTTP server. Handles routing based on method and URL path. All
-// API endpoints live under the /api prefix. Non‑API requests return
-// a simple message.
+// Handle file uploads with formidable (if available)
+function parseFormData(req) {
+  return new Promise((resolve, reject) => {
+    if (!formidable) {
+      reject(new Error('Formidable not installed'));
+      return;
+    }
+    
+    const form = new formidable.IncomingForm({
+      uploadDir: UPLOADS_DIR,
+      keepExtensions: true,
+      maxFileSize: CONFIG.MAX_FILE_SIZE,
+      multiples: true
+    });
+    
+    form.parse(req, (err, fields, files) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({ fields, files });
+      }
+    });
+  });
+}
+
+// Save file attachment
+function saveAttachment(file, issueId, uploadedBy) {
+  const fileExtension = path.extname(file.originalFilename || file.name);
+  const uniqueFilename = `${generateId()}${fileExtension}`;
+  const finalPath = path.join(UPLOADS_DIR, uniqueFilename);
+  
+  // Move file to final location
+  fs.renameSync(file.filepath || file.path, finalPath);
+  
+  const attachment = {
+    id: generateId(),
+    issueId,
+    originalName: file.originalFilename || file.name,
+    filename: uniqueFilename,
+    size: file.size,
+    mimetype: file.mimetype || file.type,
+    uploadedBy,
+    uploadedAt: new Date().toISOString()
+  };
+  
+  const attachments = readAttachments();
+  attachments.push(attachment);
+  writeAttachments(attachments);
+  
+  return attachment;
+}
+
+// Delete attachment file
+function deleteAttachment(attachmentId) {
+  const attachments = readAttachments();
+  const attachment = attachments.find(a => a.id === attachmentId);
+  
+  if (!attachment) {
+    return false;
+  }
+  
+  // Delete physical file
+  const filePath = path.join(UPLOADS_DIR, attachment.filename);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+  
+  // Remove from database
+  const updatedAttachments = attachments.filter(a => a.id !== attachmentId);
+  writeAttachments(updatedAttachments);
+  
+  return true;
+}
+
+// Enhanced delete functions with comprehensive cleanup
+
+// Delete all attachments for multiple issues
+function deleteAttachmentsForIssues(issueIds) {
+  const attachments = readAttachments();
+  const toDelete = attachments.filter(a => issueIds.includes(a.issueId));
+  
+  // Delete physical files
+  toDelete.forEach(attachment => {
+    const filePath = path.join(UPLOADS_DIR, attachment.filename);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.error(`Failed to delete file ${attachment.filename}:`, err);
+      }
+    }
+  });
+  
+  // Remove from database
+  const remaining = attachments.filter(a => !issueIds.includes(a.issueId));
+  writeAttachments(remaining);
+  
+  return toDelete.length;
+}
+
+// Delete all notifications related to specific issues
+function deleteNotificationsForIssues(issueIds, issuesTitles) {
+  const notifications = readNotifications();
+  const issueTitleSet = new Set(issuesTitles);
+  
+  const remaining = notifications.filter(n => {
+    // Remove notifications that mention any of the deleted issues
+    return !issueTitleSet.some(title => n.message.includes(title));
+  });
+  
+  const deletedCount = notifications.length - remaining.length;
+  if (deletedCount > 0) {
+    writeNotifications(remaining);
+  }
+  
+  return deletedCount;
+}
+
+// Comprehensive project deletion
+function deleteProjectCompletely(projectId) {
+  const projects = readProjects();
+  const project = projects.find(p => p.id === projectId);
+  if (!project) {
+    throw new Error('Project not found');
+  }
+  
+  console.log(`🗑️ Starting comprehensive deletion of project: ${project.name}`);
+  
+  // Get all related data
+  const issues = readIssues().filter(i => i.projectId === projectId);
+  const sprints = readSprints().filter(s => s.projectId === projectId);
+  const workflows = readWorkflows().filter(w => w.projectId === projectId);
+  
+  const issueIds = issues.map(i => i.id);
+  const issueTitles = issues.map(i => i.title);
+  const sprintIds = sprints.map(s => s.id);
+  
+  // Delete attachments
+  const deletedAttachments = deleteAttachmentsForIssues(issueIds);
+  console.log(`🗑️ Deleted ${deletedAttachments} attachments`);
+  
+  // Delete notifications
+  const deletedNotifications = deleteNotificationsForIssues(issueIds, issueTitles);
+  console.log(`🗑️ Deleted ${deletedNotifications} notifications`);
+  
+  // Delete issues
+  const allIssues = readIssues();
+  const remainingIssues = allIssues.filter(i => i.projectId !== projectId);
+  writeIssues(remainingIssues);
+  console.log(`🗑️ Deleted ${issues.length} issues`);
+  
+  // Delete sprints
+  const allSprints = readSprints();
+  const remainingSprints = allSprints.filter(s => s.projectId !== projectId);
+  writeSprints(remainingSprints);
+  console.log(`🗑️ Deleted ${sprints.length} sprints`);
+  
+  // Delete workflows
+  const allWorkflows = readWorkflows();
+  const remainingWorkflows = allWorkflows.filter(w => w.projectId !== projectId);
+  writeWorkflows(remainingWorkflows);
+  console.log(`🗑️ Deleted ${workflows.length} workflows`);
+  
+  // Delete project
+  const remainingProjects = projects.filter(p => p.id !== projectId);
+  writeProjects(remainingProjects);
+  console.log(`🗑️ Deleted project: ${project.name}`);
+  
+  return {
+    project: project.name,
+    deletedIssues: issues.length,
+    deletedSprints: sprints.length,
+    deletedAttachments,
+    deletedNotifications,
+    deletedWorkflows: workflows.length
+  };
+}
+
+// Comprehensive sprint deletion
+function deleteSprintCompletely(sprintId) {
+  const sprints = readSprints();
+  const sprint = sprints.find(s => s.id === sprintId);
+  if (!sprint) {
+    throw new Error('Sprint not found');
+  }
+  
+  console.log(`🗑️ Starting deletion of sprint: ${sprint.name}`);
+  
+  // Remove sprint assignment from all issues (move to backlog)
+  const issues = readIssues();
+  let movedIssues = 0;
+  
+  issues.forEach(issue => {
+    if (issue.sprintId === sprintId) {
+      issue.sprintId = null;
+      issue.updatedAt = new Date().toISOString();
+      movedIssues++;
+    }
+  });
+  
+  if (movedIssues > 0) {
+    writeIssues(issues);
+    console.log(`🗑️ Moved ${movedIssues} issues to backlog`);
+  }
+  
+  // Delete sprint notifications
+  const notifications = readNotifications();
+  const remainingNotifications = notifications.filter(n => 
+    !n.message.includes(`"${sprint.name}"`) && 
+    !n.message.includes(`Sprint "${sprint.name}"`)
+  );
+  const deletedNotifications = notifications.length - remainingNotifications.length;
+  
+  if (deletedNotifications > 0) {
+    writeNotifications(remainingNotifications);
+    console.log(`🗑️ Deleted ${deletedNotifications} sprint notifications`);
+  }
+  
+  // Delete the sprint
+  const remainingSprints = sprints.filter(s => s.id !== sprintId);
+  writeSprints(remainingSprints);
+  console.log(`🗑️ Deleted sprint: ${sprint.name}`);
+  
+  return {
+    sprint: sprint.name,
+    movedIssues,
+    deletedNotifications
+  };
+}
+
+// Initialize data files on startup
+initializeDataFile('users.json', []);
+initializeDataFile('projects.json', []);
+initializeDataFile('issues.json', []);
+initializeDataFile('sprints.json', []);
+initializeDataFile('workflows.json', []);
+initializeDataFile('notifications.json', []);
+initializeDataFile('sessions.json', {});
+initializeDataFile('attachments.json', []);
+
+// Log application start with the new branding
+console.log('🏆 Crowley App - Modern Project Management System (Enhanced Edition)');
+console.log('📁 Data directory:', DATA_DIR);
+console.log('📎 Uploads directory:', UPLOADS_DIR);
+console.log('🌐 Public directory:', PUBLIC_DIR);
+console.log('🗑️ Enhanced delete functionality enabled');
+
+// Basic HTTP server
 const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
   const method = req.method.toUpperCase();
   const pathname = parsedUrl.pathname;
 
+  // Enhanced CORS handling
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+  
   // Handle CORS preflight
   if (method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    });
+    res.writeHead(204, corsHeaders);
     res.end();
     return;
   }
-
-  // Set CORS header for all other requests
-  res.setHeader('Access-Control-Allow-Origin', '*');
-
+  
+  // Set CORS headers for all requests
+  Object.keys(corsHeaders).forEach(key => {
+    res.setHeader(key, corsHeaders[key]);
+  });
+  
   try {
+    // Serve uploaded files
+    if (pathname.startsWith('/uploads/') && method === 'GET') {
+      const filename = pathname.substring(9);
+      const filePath = path.join(UPLOADS_DIR, filename);
+      
+      // Security check
+      if (!filePath.startsWith(UPLOADS_DIR) || filename.includes('..')) {
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        res.end('Forbidden');
+        return;
+      }
+      
+      if (!fs.existsSync(filePath)) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('File not found');
+        return;
+      }
+      
+      const stat = fs.statSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      
+      // Determine content type
+      const mimeTypes = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.pdf': 'application/pdf',
+        '.txt': 'text/plain',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.zip': 'application/zip',
+        '.csv': 'text/csv'
+      };
+      
+      const contentType = mimeTypes[ext] || 'application/octet-stream';
+      
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Content-Length': stat.size,
+        'Cache-Control': 'public, max-age=31536000'
+      });
+      
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
+      return;
+    }
+    
     // Static file serving for non-API GET requests
     if (!pathname.startsWith('/api') && method === 'GET') {
       let filePath = pathname === '/' ? '/index.html' : pathname;
-      const resolved = path.join(__dirname, 'public', decodeURIComponent(filePath));
-      if (!resolved.startsWith(path.join(__dirname, 'public'))) {
-        res.writeHead(403);
+      const resolved = path.join(PUBLIC_DIR, decodeURIComponent(filePath));
+      
+      // Security check for directory traversal
+      if (!resolved.startsWith(PUBLIC_DIR)) {
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
         res.end('Forbidden');
         return;
       }
+      
+      // If file doesn't exist in public, check root directory (for backward compatibility)
+      if (!fs.existsSync(resolved)) {
+        const rootPath = path.join(__dirname, decodeURIComponent(filePath));
+        if (fs.existsSync(rootPath) && !rootPath.includes('..') && rootPath.startsWith(__dirname)) {
+          fs.readFile(rootPath, (err, content) => {
+            if (err) {
+              res.writeHead(404, { 'Content-Type': 'text/plain' });
+              res.end('Not found');
+              return;
+            }
+            
+            const ext = path.extname(rootPath).toLowerCase();
+            const mimeTypes = {
+              '.html': 'text/html',
+              '.css': 'text/css',
+              '.js': 'application/javascript',
+              '.json': 'application/json',
+              '.png': 'image/png',
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.gif': 'image/gif',
+              '.svg': 'image/svg+xml',
+            };
+            const contentType = mimeTypes[ext] || 'application/octet-stream';
+            
+            res.writeHead(200, { 'Content-Type': contentType });
+            res.end(content);
+          });
+          return;
+        }
+      }
+      
       fs.readFile(resolved, (err, content) => {
         if (err) {
-          res.writeHead(404);
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
           res.end('Not found');
           return;
         }
-        res.writeHead(200);
-        res.end(content);
-      });
-      return;
-    }
-
-    // Only API calls are implemented here. Provide a simple 404 for others.
-    if (!pathname.startsWith('/api')) {
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end('Jira‑lite server running. Use the /api endpoints.');
-      return;
-    }
-
-    /**
-     * Registration endpoint
-     *
-     * POST /api/register
-     * Body: { email: string, password: string, role?: string }
-     * Creates a new user account. The first user created may want to be
-     * an admin to seed the system. If no role is provided the default
-     * is "developer". Returns 201 on success.
-     */
-    if (method === 'POST' && pathname === '/api/register') {
-      const body = await parseBody(req);
-      const { email, password, role } = body;
-      if (!email || !password) {
-        throw new Error('Email and password are required');
-      }
-      if (role && !VALID_ROLES.includes(role)) {
-        throw new Error('Invalid role');
-      }
-      const users = readJson('users.json') || [];
-      if (users.find(u => u.email === email)) {
-        throw new Error('Email already exists');
-      }
-      const user = {
-        id: generateId(),
-        email: String(email).toLowerCase(),
-        passwordHash: hashPassword(password),
-        role: role || 'developer',
-        createdAt: new Date().toISOString(),
-      };
-      users.push(user);
-      writeJson('users.json', users);
-      res.writeHead(201, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ message: 'User registered', user: { id: user.id, email: user.email, role: user.role } }));
-      return;
-    }
-
-    /**
-     * Login endpoint
-     *
-     * POST /api/login
-     * Body: { email: string, password: string }
-     * Validates credentials and returns a session token if correct. The
-     * token must be supplied in the Authorization header for future
-     * requests.
-     */
-    if (method === 'POST' && pathname === '/api/login') {
-      const body = await parseBody(req);
-      const { email, password } = body;
-      if (!email || !password) {
-        throw new Error('Email and password are required');
-      }
-      const users = readJson('users.json') || [];
-      const user = users.find(u => u.email === String(email).toLowerCase());
-      if (!user || user.passwordHash !== hashPassword(password)) {
-        throw new Error('Invalid credentials');
-      }
-      const sessions = readSessions();
-      const token = crypto.randomBytes(16).toString('hex');
-      sessions[token] = { userId: user.id, createdAt: Date.now() };
-      writeSessions(sessions);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ token, user: { id: user.id, email: user.email, role: user.role } }));
-      return;
-    }
-
-    // All routes below this point require authentication
-    const currentUser = authenticate(req);
-    if (!currentUser) {
-      res.writeHead(401, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Unauthorized' }));
-      return;
-    }
-
-    /**
-     * List all projects
-     *
-     * GET /api/projects
-     * Returns an array of all projects. In a real application you may
-     * filter this by the current user's permissions or membership.
-     */
-    if (method === 'GET' && pathname === '/api/projects') {
-      const projects = readJson('projects.json') || [];
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(projects));
-      return;
-    }
-
-    /**
-     * Create a new project
-     *
-     * POST /api/projects
-     * Body: { name: string, key?: string }
-     * Only users with the admin or project_manager role may create projects.
-     */
-    if (method === 'POST' && pathname === '/api/projects') {
-      if (!['admin', 'project_manager'].includes(currentUser.role)) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      const body = await parseBody(req);
-      const { name, key } = body;
-      if (!name) {
-        throw new Error('Project name is required');
-      }
-      const projects = readJson('projects.json') || [];
-      const newProject = {
-        id: generateId(),
-        name: String(name),
-        key: key || String(name).substring(0, 3).toUpperCase(),
-        ownerId: currentUser.id,
-        createdAt: new Date().toISOString(),
-      };
-      projects.push(newProject);
-      writeJson('projects.json', projects);
-      res.writeHead(201, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(newProject));
-      return;
-    }
-
-    /**
-     * Update a project
-     *
-     * PUT /api/projects/:id
-     * Body: { name?: string, key?: string }
-     * Only admins or the project owner may update the project.
-     */
-    if (method === 'PUT' && pathname.startsWith('/api/projects/')) {
-      const parts = pathname.split('/');
-      const projectId = parts[parts.length - 1];
-      const projects = readJson('projects.json') || [];
-      const project = projects.find(p => p.id === projectId);
-      if (!project) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      // Only admins or the owner can modify
-      if (currentUser.role !== 'admin' && project.ownerId !== currentUser.id) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      const body = await parseBody(req);
-      const { name, key } = body;
-      if (name) project.name = String(name);
-      if (key) project.key = String(key);
-      writeJson('projects.json', projects);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(project));
-      return;
-    }
-
-    /**
-     * Delete a project
-     *
-     * DELETE /api/projects/:id
-     * Only admins can delete projects. Deleting a project also
-     * deletes its issues.
-     */
-    if (method === 'DELETE' && pathname.startsWith('/api/projects/')) {
-      const parts = pathname.split('/');
-      const projectId = parts[parts.length - 1];
-      if (currentUser.role !== 'admin') {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      let projects = readJson('projects.json') || [];
-      const index = projects.findIndex(p => p.id === projectId);
-      if (index < 0) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      projects.splice(index, 1);
-      writeJson('projects.json', projects);
-      // Remove project issues
-      let issues = readJson('issues.json') || [];
-      issues = issues.filter(i => i.projectId !== projectId);
-      writeJson('issues.json', issues);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ message: 'Project deleted' }));
-      return;
-    }
-
-    /**
-     * List issues for a project
-     *
-     * GET /api/projects/:projectId/issues
-     * Returns an array of issues belonging to the given project. Any
-     * authenticated user may view issues.
-     */
-    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/issues')) {
-      const parts = pathname.split('/');
-      // /api/projects/{id}/issues → last index is "issues", second last is project id
-      const projectId = parts[parts.length - 2];
-      const projects = readJson('projects.json') || [];
-      if (!projects.find(p => p.id === projectId)) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      const issues = readJson('issues.json') || [];
-      const projectIssues = issues.filter(i => i.projectId === projectId);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(projectIssues));
-      return;
-    }
-
-    /**
-     * Create an issue
-     *
-     * POST /api/issues
-     * Body: { projectId: string, title: string, description?: string,
-     *         priority?: string, status?: string, assignee?: string,
-     *         dueDate?: string, labels?: string[], parentId?: string }
-     * Only users who are not viewers may create issues.
-     */
-    if (method === 'POST' && pathname === '/api/issues') {
-      if (currentUser.role === 'viewer') {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      const body = await parseBody(req);
-      const {
-        projectId,
-        title,
-        description,
-        priority,
-        status,
-        assignee,
-        dueDate,
-        labels,
-        parentId,
-        sprintId,
-      } = body;
-      if (!projectId || !title) {
-        throw new Error('projectId and title are required');
-      }
-      // Validate project exists
-      const projects = readJson('projects.json') || [];
-      const project = projects.find(p => p.id === projectId);
-      if (!project) {
-        throw new Error('Project not found');
-      }
-      // Ensure workflow exists and validate status
-      const workflow = ensureWorkflow(projectId);
-      let issueStatus;
-      if (status) {
-        if (!workflow.statuses.includes(status)) {
-          throw new Error('Invalid status');
-        }
-        issueStatus = status;
-      } else {
-        issueStatus = workflow.statuses[0];
-      }
-      // Validate assignee if provided
-      let assignedUser = null;
-      if (assignee) {
-        const users = readJson('users.json') || [];
-        assignedUser = users.find(u => u.id === assignee);
-        if (!assignedUser) {
-          throw new Error('Assignee not found');
-        }
-      }
-      // Validate parent if provided
-      if (parentId) {
-        const allIssues = readJson('issues.json') || [];
-        const parent = allIssues.find(i => i.id === parentId);
-        if (!parent) {
-          throw new Error('Parent issue not found');
-        }
-      }
-      // Validate sprint if provided
-      if (sprintId) {
-        const sprints = readSprints();
-        const s = sprints.find(sp => sp.id === sprintId);
-        if (!s) {
-          throw new Error('Sprint not found');
-        }
-        if (s.projectId !== projectId) {
-          throw new Error('Sprint does not belong to this project');
-        }
-      }
-      const issues = readJson('issues.json') || [];
-      const newIssue = {
-        id: generateId(),
-        projectId,
-        title: String(title),
-        description: description ? String(description) : '',
-        priority: priority || 'Medium',
-        status: issueStatus,
-        assignee: assignee || null,
-        dueDate: dueDate || null,
-        labels: Array.isArray(labels) ? labels : [],
-        parentId: parentId || null,
-        sprintId: sprintId || null,
-        creatorId: currentUser.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      issues.push(newIssue);
-      writeJson('issues.json', issues);
-      // Notify the assignee and project owner (if different) of the new issue
-      const notifyIds = [];
-      if (assignedUser) notifyIds.push(assignedUser.id);
-      if (project.ownerId && project.ownerId !== currentUser.id) notifyIds.push(project.ownerId);
-      sendNotification(notifyIds, `New issue "${newIssue.title}" created in project ${project.name}`);
-      res.writeHead(201, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(newIssue));
-      return;
-    }
-
-    /**
-     * Update an issue
-     *
-     * PUT /api/issues/:id
-     * Body: may contain any mutable fields. Only the creator, assignee,
-     * project owner or admins may update an issue. Viewers cannot update.
-     */
-    if (method === 'PUT' && pathname.startsWith('/api/issues/')) {
-      const parts = pathname.split('/');
-      const issueId = parts[parts.length - 1];
-      const issues = readJson('issues.json') || [];
-      const issue = issues.find(i => i.id === issueId);
-      if (!issue) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Issue not found' }));
-        return;
-      }
-      // Only allowed roles can modify
-      const projects = readJson('projects.json') || [];
-      const project = projects.find(p => p.id === issue.projectId);
-      const isProjectOwner = project && project.ownerId === currentUser.id;
-      const canEdit =
-        currentUser.role === 'admin' ||
-        currentUser.id === issue.creatorId ||
-        currentUser.id === issue.assignee ||
-        isProjectOwner;
-      if (!canEdit) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      const body = await parseBody(req);
-      const allowed = ['title', 'description', 'priority', 'status', 'assignee', 'dueDate', 'labels', 'parentId', 'sprintId'];
-      let notifyChangedStatus = false;
-      let notifyChangedAssignee = false;
-      let oldStatus = issue.status;
-      let oldAssignee = issue.assignee;
-      for (const key of allowed) {
-        if (Object.prototype.hasOwnProperty.call(body, key)) {
-          // Validate specific fields
-          if (key === 'status') {
-            const workflow = ensureWorkflow(issue.projectId);
-            const newStatus = body[key];
-            if (!workflow.statuses.includes(newStatus)) {
-              throw new Error('Invalid status');
-            }
-            if (newStatus !== issue.status) {
-              notifyChangedStatus = true;
-              oldStatus = issue.status;
-              issue.status = newStatus;
-              // Record completion time when moving to Done; clear when moving out of Done
-              if (newStatus === 'Done' && oldStatus !== 'Done') {
-                issue.doneAt = new Date().toISOString();
-              } else if (oldStatus === 'Done' && newStatus !== 'Done') {
-                issue.doneAt = null;
-              }
-            }
-            continue;
-          }
-          if (key === 'assignee') {
-            const newAssignee = body[key] || null;
-            if (newAssignee) {
-              const users = readJson('users.json') || [];
-              const exists = users.find(u => u.id === newAssignee);
-              if (!exists) {
-                throw new Error('Assignee not found');
-              }
-            }
-            if (newAssignee !== issue.assignee) {
-              notifyChangedAssignee = true;
-              oldAssignee = issue.assignee;
-              issue.assignee = newAssignee;
-            }
-            continue;
-          }
-          if (key === 'sprintId') {
-            const newSprint = body[key] || null;
-            if (newSprint) {
-              const sprints = readSprints();
-              const sp = sprints.find(s => s.id === newSprint);
-              if (!sp) {
-                throw new Error('Sprint not found');
-              }
-              if (sp.projectId !== issue.projectId) {
-                throw new Error('Sprint does not belong to this project');
-              }
-            }
-            issue.sprintId = newSprint;
-            continue;
-          }
-          if (key === 'labels') {
-            issue[key] = Array.isArray(body[key]) ? body[key] : [];
-            continue;
-          }
-          issue[key] = body[key];
-        }
-      }
-      issue.updatedAt = new Date().toISOString();
-      writeJson('issues.json', issues);
-      // If status changed notify assignee and project owner
-      if (notifyChangedStatus) {
-          const projects = readJson('projects.json') || [];
-          const project = projects.find(p => p.id === issue.projectId);
-          const notifyIds = [];
-          if (issue.assignee) notifyIds.push(issue.assignee);
-          if (project && project.ownerId) notifyIds.push(project.ownerId);
-          sendNotification(notifyIds, `Issue "${issue.title}" status changed to ${issue.status}`);
-      }
-      // If assignee changed notify new assignee
-      if (notifyChangedAssignee && issue.assignee) {
-          sendNotification([issue.assignee], `You have been assigned issue "${issue.title}"`);
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(issue));
-      return;
-    }
-
-    /**
-     * Delete an issue
-     *
-     * DELETE /api/issues/:id
-     * Only admins or the creator may delete an issue.
-     */
-    if (method === 'DELETE' && pathname.startsWith('/api/issues/')) {
-      const parts = pathname.split('/');
-      const issueId = parts[parts.length - 1];
-      let issues = readJson('issues.json') || [];
-      const index = issues.findIndex(i => i.id === issueId);
-      if (index < 0) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Issue not found' }));
-        return;
-      }
-      const issue = issues[index];
-      if (currentUser.role !== 'admin' && currentUser.id !== issue.creatorId) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      // Delete the issue and any subtasks whose parentId matches
-      const deleteIds = [issueId];
-      issues = issues.filter(i => !deleteIds.includes(i.id) && i.parentId !== issueId);
-      writeJson('issues.json', issues);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ message: 'Issue deleted' }));
-      return;
-    }
-
-    /**
-     * Get workflow for a project
-     *
-     * GET /api/projects/:projectId/workflow
-     * Returns the workflow object containing statuses and transitions.
-     */
-    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/workflow')) {
-      const parts = pathname.split('/');
-      const projectId = parts[3];
-      const projects = readJson('projects.json') || [];
-      if (!projects.find(p => p.id === projectId)) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      const workflow = ensureWorkflow(projectId);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(workflow));
-      return;
-    }
-
-    /**
-     * Update workflow for a project
-     *
-     * PUT /api/projects/:projectId/workflow
-     * Body: { statuses: string[], transitions?: object }
-     * Only admins, project managers or the project owner may update the workflow.
-     */
-    if (method === 'PUT' && pathname.startsWith('/api/projects/') && pathname.endsWith('/workflow')) {
-      const parts = pathname.split('/');
-      const projectId = parts[3];
-      const projects = readJson('projects.json') || [];
-      const project = projects.find(p => p.id === projectId);
-      if (!project) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      // Authorization: admin, project_manager, owner
-      const allowedRoles = ['admin', 'project_manager'];
-      const isOwner = project.ownerId === currentUser.id;
-      if (!allowedRoles.includes(currentUser.role) && !isOwner) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      const body = await parseBody(req);
-      const { statuses, transitions } = body;
-      if (!Array.isArray(statuses) || statuses.length === 0) {
-        throw new Error('statuses array is required');
-      }
-      // Coerce to strings and trim
-      const cleaned = statuses.map(s => String(s));
-      let workflows = readWorkflows();
-      let wf = workflows.find(w => w.projectId === projectId);
-      if (!wf) {
-        wf = { projectId, statuses: cleaned, transitions: transitions || {} };
-        workflows.push(wf);
-      } else {
-        wf.statuses = cleaned;
-        wf.transitions = transitions || {};
-      }
-      writeWorkflows(workflows);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(wf));
-      return;
-    }
-
-    /**
-     * List sprints for a project
-     *
-     * GET /api/projects/:projectId/sprints
-     */
-    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/sprints')) {
-      const parts = pathname.split('/');
-      const projectId = parts[3];
-      const projects = readJson('projects.json') || [];
-      if (!projects.find(p => p.id === projectId)) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      const sprints = readSprints().filter(sp => sp.projectId === projectId);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(sprints));
-      return;
-    }
-
-    /**
-     * Create a sprint for a project
-     *
-     * POST /api/projects/:projectId/sprints
-     * Body: { name: string, startDate?: string, endDate?: string }
-     * Only admins, project managers or project owners can create sprints.
-     */
-    if (method === 'POST' && pathname.startsWith('/api/projects/') && pathname.endsWith('/sprints')) {
-      const parts = pathname.split('/');
-      const projectId = parts[3];
-      const projects = readJson('projects.json') || [];
-      const project = projects.find(p => p.id === projectId);
-      if (!project) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      const allowedRoles = ['admin', 'project_manager'];
-      const isOwner = project.ownerId === currentUser.id;
-      if (!allowedRoles.includes(currentUser.role) && !isOwner) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      const body = await parseBody(req);
-      const { name, startDate, endDate } = body;
-      if (!name) {
-        throw new Error('Sprint name is required');
-      }
-      const sprints = readSprints();
-      const newSprint = {
-        id: generateId(),
-        projectId,
-        name: String(name),
-        startDate: startDate || null,
-        endDate: endDate || null,
-        status: 'planning',
-        createdAt: new Date().toISOString(),
-        closedAt: null,
-      };
-      sprints.push(newSprint);
-      writeSprints(sprints);
-      res.writeHead(201, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(newSprint));
-      return;
-    }
-
-    /**
-     * Start a sprint
-     *
-     * POST /api/sprints/:sprintId/start
-     * Marks a sprint as active and sets the startDate if not already
-     * set. Only admins, project managers or project owners may start.
-     */
-    if (method === 'POST' && pathname.startsWith('/api/sprints/') && pathname.endsWith('/start')) {
-      const parts = pathname.split('/');
-      const sprintId = parts[3];
-      const sprints = readSprints();
-      const sprint = sprints.find(sp => sp.id === sprintId);
-      if (!sprint) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Sprint not found' }));
-        return;
-      }
-      const projects = readJson('projects.json') || [];
-      const project = projects.find(p => p.id === sprint.projectId);
-      if (!project) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      const allowedRoles = ['admin', 'project_manager'];
-      const isOwner = project.ownerId === currentUser.id;
-      if (!allowedRoles.includes(currentUser.role) && !isOwner) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      if (sprint.status === 'active') {
-        throw new Error('Sprint already started');
-      }
-      if (sprint.status === 'closed') {
-        throw new Error('Cannot start a closed sprint');
-      }
-      sprint.status = 'active';
-      if (!sprint.startDate) {
-        sprint.startDate = new Date().toISOString();
-      }
-      writeSprints(sprints);
-      // notify project owner and all assignees of issues in this sprint
-      const issues = readJson('issues.json') || [];
-      const sprintIssues = issues.filter(i => i.sprintId === sprintId);
-      const assigneeIds = sprintIssues.map(i => i.assignee).filter(Boolean);
-      const notifyIds = [...new Set([project.ownerId, ...assigneeIds])].filter(Boolean);
-      sendNotification(notifyIds, `Sprint "${sprint.name}" has started`);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(sprint));
-      return;
-    }
-
-    /**
-     * Close a sprint
-     *
-     * POST /api/sprints/:sprintId/close
-     * Marks a sprint as closed and sets the endDate if not already set.
-     * Moves incomplete issues back to the backlog (sprintId = null).
-     */
-    if (method === 'POST' && pathname.startsWith('/api/sprints/') && pathname.endsWith('/close')) {
-      const parts = pathname.split('/');
-      const sprintId = parts[3];
-      const sprints = readSprints();
-      const sprint = sprints.find(sp => sp.id === sprintId);
-      if (!sprint) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Sprint not found' }));
-        return;
-      }
-      const projects = readJson('projects.json') || [];
-      const project = projects.find(p => p.id === sprint.projectId);
-      if (!project) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      const allowedRoles = ['admin', 'project_manager'];
-      const isOwner = project.ownerId === currentUser.id;
-      if (!allowedRoles.includes(currentUser.role) && !isOwner) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      if (sprint.status === 'closed') {
-        throw new Error('Sprint already closed');
-      }
-      sprint.status = 'closed';
-      sprint.closedAt = new Date().toISOString();
-      if (!sprint.endDate) sprint.endDate = sprint.closedAt;
-      writeSprints(sprints);
-      // Move open issues to backlog (sprintId = null)
-      const issues = readJson('issues.json') || [];
-      let changed = false;
-      for (const issue of issues) {
-        if (issue.sprintId === sprintId && issue.status !== 'Done') {
-          issue.sprintId = null;
-          changed = true;
-        }
-      }
-      if (changed) writeJson('issues.json', issues);
-      // notify assignees and project owner
-      const sprintIssues = issues.filter(i => i.sprintId === sprintId);
-      const assigneeIds = sprintIssues.map(i => i.assignee).filter(Boolean);
-      const notifyIds = [...new Set([project.ownerId, ...assigneeIds])].filter(Boolean);
-      sendNotification(notifyIds, `Sprint "${sprint.name}" has been closed`);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(sprint));
-      return;
-    }
-
-    /**
-     * Update a sprint
-     *
-     * PUT /api/sprints/:sprintId
-     * Only admins, project managers or owners may update a sprint. You
-     * may update name, startDate and endDate when the sprint is in
-     * planning. Active or closed sprints cannot have their dates
-     * modified.
-     */
-    if (method === 'PUT' && pathname.startsWith('/api/sprints/')) {
-      const parts = pathname.split('/');
-      const sprintId = parts[3];
-      if (parts.length !== 4) {
-        // ensure we do not match /start or /close or /issues endpoints
-        // ignore, will be handled in other conditions
-      } else {
-        const sprints = readSprints();
-        const sprint = sprints.find(sp => sp.id === sprintId);
-        if (!sprint) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Sprint not found' }));
-          return;
-        }
-        const projects = readJson('projects.json') || [];
-        const project = projects.find(p => p.id === sprint.projectId);
-        if (!project) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Project not found' }));
-          return;
-        }
-        const allowedRoles = ['admin', 'project_manager'];
-        const isOwner = project.ownerId === currentUser.id;
-        if (!allowedRoles.includes(currentUser.role) && !isOwner) {
-          res.writeHead(403, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Forbidden' }));
-          return;
-        }
-        const body = await parseBody(req);
-        const { name, startDate, endDate } = body;
-        if (name) sprint.name = String(name);
-        if (sprint.status === 'planning') {
-          if (startDate) sprint.startDate = startDate;
-          if (endDate) sprint.endDate = endDate;
-        }
-        writeSprints(sprints);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(sprint));
-        return;
-      }
-    }
-
-    /**
-     * Assign issues to a sprint
-     *
-     * POST /api/sprints/:sprintId/issues
-     * Body: { issueId: string }
-     * Only non‑viewer users may assign issues. The issue must belong
-     * to the same project as the sprint.
-     */
-    if (method === 'POST' && pathname.startsWith('/api/sprints/') && pathname.endsWith('/issues')) {
-      const parts = pathname.split('/');
-      const sprintId = parts[3];
-      const sprints = readSprints();
-      const sprint = sprints.find(sp => sp.id === sprintId);
-      if (!sprint) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Sprint not found' }));
-        return;
-      }
-      const projects = readJson('projects.json') || [];
-      const project = projects.find(p => p.id === sprint.projectId);
-      if (!project) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      if (currentUser.role === 'viewer') {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
-        return;
-      }
-      const body = await parseBody(req);
-      const { issueId } = body;
-      if (!issueId) {
-        throw new Error('issueId is required');
-      }
-      const issues = readJson('issues.json') || [];
-      const issue = issues.find(i => i.id === issueId);
-      if (!issue) {
-        throw new Error('Issue not found');
-      }
-      if (issue.projectId !== sprint.projectId) {
-        throw new Error('Issue does not belong to this project');
-      }
-      issue.sprintId = sprintId;
-      issue.updatedAt = new Date().toISOString();
-      writeJson('issues.json', issues);
-      // notify assignee
-      if (issue.assignee) {
-        sendNotification([issue.assignee], `Issue "${issue.title}" has been added to sprint ${sprint.name}`);
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(issue));
-      return;
-    }
-
-    /**
-     * Get backlog for a project
-     *
-     * GET /api/projects/:projectId/backlog
-     * Returns issues that are not assigned to any sprint.
-     */
-    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/backlog')) {
-      const parts = pathname.split('/');
-      const projectId = parts[3];
-      const projects = readJson('projects.json') || [];
-      if (!projects.find(p => p.id === projectId)) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      const issues = readJson('issues.json') || [];
-      const backlog = issues.filter(i => i.projectId === projectId && !i.sprintId);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(backlog));
-      return;
-    }
-
-    /**
-     * Get board for a project (Kanban/Scrum)
-     *
-     * GET /api/projects/:projectId/board
-     * Optional query string: ?sprintId=... to filter to a specific sprint.
-     * Returns an object keyed by status with arrays of issues.
-     */
-    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/board')) {
-      const parts = pathname.split('/');
-      const projectId = parts[3];
-      const projects = readJson('projects.json') || [];
-      if (!projects.find(p => p.id === projectId)) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      const workflow = ensureWorkflow(projectId);
-      const issues = readJson('issues.json') || [];
-      // Determine sprint filter
-      const sprintId = parsedUrl.query && parsedUrl.query.sprintId ? parsedUrl.query.sprintId : undefined;
-      const filtered = issues.filter(i => i.projectId === projectId && (sprintId === undefined || i.sprintId === sprintId));
-      const board = {};
-      for (const status of workflow.statuses) {
-        board[status] = filtered.filter(i => i.status === status);
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(board));
-      return;
-    }
-
-    /**
-     * Get burndown data for a sprint
-     *
-     * GET /api/sprints/:sprintId/burndown
-     * Returns an array of { date: yyyy-mm-dd, remaining: number } for
-     * each day from the sprint's start to end (or today if active).
-     * Remaining counts how many issues have not yet reached the Done
-     * status by that date. This is a simplified burndown that uses
-     * issue.doneAt timestamps.
-     */
-    if (method === 'GET' && pathname.startsWith('/api/sprints/') && pathname.endsWith('/burndown')) {
-      const parts = pathname.split('/');
-      const sprintId = parts[3];
-      const sprints = readSprints();
-      const sprint = sprints.find(sp => sp.id === sprintId);
-      if (!sprint) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Sprint not found' }));
-        return;
-      }
-      if (!sprint.startDate) {
-        throw new Error('Sprint has not started yet');
-      }
-      // Determine end date: sprint.endDate if set, else today
-      const endDateStr = sprint.endDate || new Date().toISOString();
-      const start = new Date(sprint.startDate);
-      const end = new Date(endDateStr);
-      // Ensure we only work with the date portion (strip time)
-      function formatDate(d) {
-        return d.toISOString().split('T')[0];
-      }
-      const issues = readJson('issues.json') || [];
-      const sprintIssues = issues.filter(i => i.sprintId === sprintId);
-      const dates = [];
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        dates.push(new Date(d));
-      }
-      const data = dates.map(dateObj => {
-        const date = formatDate(dateObj);
-        // Count issues that are still open on this date
-        let remaining = 0;
-        for (const issue of sprintIssues) {
-          // Issue is open if no doneAt or doneAt is after this date
-          const doneAtDate = issue.doneAt ? new Date(issue.doneAt) : null;
-          if (!doneAtDate || doneAtDate > dateObj) {
-            remaining++;
-          }
-        }
-        return { date, remaining };
-      });
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(data));
-      return;
-    }
-
-    /**
-     * Notifications: list and mark as read
-     *
-     * GET /api/notifications → list current user's notifications
-     * POST /api/notifications/:id/read → mark a notification as read
-     */
-    if (method === 'GET' && pathname === '/api/notifications') {
-      const notifications = readNotifications().filter(n => n.userId === currentUser.id);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(notifications));
-      return;
-    }
-    if (method === 'POST' && pathname.startsWith('/api/notifications/') && pathname.endsWith('/read')) {
-      const parts = pathname.split('/');
-      const notifId = parts[3];
-      let notifications = readNotifications();
-      const notif = notifications.find(n => n.id === notifId && n.userId === currentUser.id);
-      if (!notif) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Notification not found' }));
-        return;
-      }
-      notif.read = true;
-      writeNotifications(notifications);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(notif));
-      return;
-    }
-
-    /**
-     * Static file serving
-     *
-     * Any GET request that does not target the API will be served from
-     * the `public` directory. This allows us to host a simple web
-     * front‑end alongside the API without additional tooling. Only
-     * common text and image content types are handled.
-     */
-    if (!pathname.startsWith('/api') && method === 'GET') {
-      // map '/' to '/index.html'
-      let filePath = pathname === '/' ? '/index.html' : pathname;
-      const resolved = path.join(__dirname, 'public', decodeURIComponent(filePath));
-      // Prevent directory traversal
-      if (!resolved.startsWith(path.join(__dirname, 'public'))) {
-        res.writeHead(403);
-        res.end('Forbidden');
-        return;
-      }
-      fs.readFile(resolved, (err, content) => {
-        if (err) {
-          res.writeHead(404);
-          res.end('Not found');
-          return;
-        }
-        // determine content type
+        
         const ext = path.extname(resolved).toLowerCase();
         const mimeTypes = {
           '.html': 'text/html',
@@ -1237,26 +644,1228 @@ const server = http.createServer(async (req, res) => {
           '.gif': 'image/gif',
           '.svg': 'image/svg+xml',
         };
-        const type = mimeTypes[ext] || 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': type });
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        
+        res.writeHead(200, { 'Content-Type': contentType });
         res.end(content);
       });
       return;
     }
-
-    // If we reach here no route matched
+    
+    // Health check endpoint
+    if (pathname === '/api/health' && method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        status: 'ok', 
+        name: 'Crowley App Enhanced',
+        version: '2.1.0',
+        features: ['enhanced_delete', 'admin_controls', 'comprehensive_cleanup'],
+        uptime: process.uptime() 
+      }));
+      return;
+    }
+    
+    // Registration endpoint
+    if (method === 'POST' && pathname === '/api/register') {
+      const body = await parseBody(req);
+      const { email, password, role } = body;
+      
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
+      
+      if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters');
+      }
+      
+      if (role && !VALID_ROLES.includes(role)) {
+        throw new Error('Invalid role');
+      }
+      
+      const users = readUsers();
+      if (users.find(u => u.email === email.toLowerCase())) {
+        throw new Error('Email already exists');
+      }
+      
+      const user = {
+        id: generateId(),
+        email: String(email).toLowerCase(),
+        passwordHash: hashPassword(password),
+        role: role || 'developer',
+        createdAt: new Date().toISOString(),
+      };
+      
+      users.push(user);
+      writeUsers(users);
+      
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        message: 'User registered', 
+        user: { id: user.id, email: user.email, role: user.role } 
+      }));
+      return;
+    }
+    
+    // Login endpoint
+    if (method === 'POST' && pathname === '/api/login') {
+      const body = await parseBody(req);
+      const { email, password } = body;
+      
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
+      
+      const users = readUsers();
+      const user = users.find(u => u.email === String(email).toLowerCase());
+      
+      if (!user || user.passwordHash !== hashPassword(password)) {
+        throw new Error('Invalid credentials');
+      }
+      
+      const sessions = readSessions();
+      const token = crypto.randomBytes(16).toString('hex');
+      sessions[token] = { userId: user.id, createdAt: Date.now() };
+      writeSessions(sessions);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        token, 
+        user: { id: user.id, email: user.email, role: user.role } 
+      }));
+      return;
+    }
+    
+    // Logout endpoint
+    if (method === 'POST' && pathname === '/api/logout') {
+      const authHeader = req.headers['authorization'];
+      if (authHeader) {
+        const token = authHeader.startsWith('Bearer ')
+          ? authHeader.slice(7)
+          : authHeader;
+        
+        const sessions = readSessions();
+        delete sessions[token];
+        writeSessions(sessions);
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'Logged out successfully' }));
+      return;
+    }
+    
+    // All routes below require authentication
+    const currentUser = authenticate(req);
+    if (!currentUser) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+    
+    // Get current user
+    if (method === 'GET' && pathname === '/api/me') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        id: currentUser.id, 
+        email: currentUser.email, 
+        role: currentUser.role 
+      }));
+      return;
+    }
+    
+    // List all users (admin only)
+    if (method === 'GET' && pathname === '/api/users') {
+      if (currentUser.role !== 'admin') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden' }));
+        return;
+      }
+      
+      const users = readUsers().map(u => ({
+        id: u.id,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt
+      }));
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(users));
+      return;
+    }
+    
+    // List all projects
+    if (method === 'GET' && pathname === '/api/projects') {
+      const projects = readProjects();
+      const users = readUsers();
+      
+      // Add owner email to projects
+      const projectsWithOwner = projects.map(p => {
+        const owner = users.find(u => u.id === p.ownerId);
+        return {
+          ...p,
+          ownerEmail: owner ? owner.email : null
+        };
+      });
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(projectsWithOwner));
+      return;
+    }
+    
+    // Get single project
+    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.split('/').length === 4) {
+      const projectId = pathname.split('/')[3];
+      const projects = readProjects();
+      const project = projects.find(p => p.id === projectId);
+      
+      if (!project) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      const users = readUsers();
+      const owner = users.find(u => u.id === project.ownerId);
+      const lead = project.leadId ? users.find(u => u.id === project.leadId) : null;
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        ...project,
+        ownerEmail: owner ? owner.email : null,
+        leadEmail: lead ? lead.email : null
+      }));
+      return;
+    }
+    
+    // Create a new project
+    if (method === 'POST' && pathname === '/api/projects') {
+      if (!['admin', 'project_manager'].includes(currentUser.role)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden' }));
+        return;
+      }
+      
+      const body = await parseBody(req);
+      const { name, key, description, lead_id } = body;
+      
+      if (!name || !key) {
+        throw new Error('Project name and key are required');
+      }
+      
+      const projects = readProjects();
+      
+      // Check if key already exists
+      if (projects.find(p => p.key === key.toUpperCase())) {
+        throw new Error('Project key already exists');
+      }
+      
+      // Validate lead_id if provided
+      if (lead_id) {
+        const users = readUsers();
+        const leadUser = users.find(u => u.id === lead_id);
+        if (!leadUser) {
+          throw new Error('Lead user not found');
+        }
+      }
+      
+      const newProject = {
+        id: generateId(),
+        name: String(name),
+        key: String(key).toUpperCase(),
+        description: description || '',
+        ownerId: currentUser.id,
+        leadId: lead_id || null,
+        createdAt: new Date().toISOString(),
+      };
+      
+      projects.push(newProject);
+      writeProjects(projects);
+      
+      // Initialize workflow for new project
+      ensureWorkflow(newProject.id);
+      
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(newProject));
+      return;
+    }
+    
+    // Update project
+    if (method === 'PUT' && pathname.startsWith('/api/projects/')) {
+      const projectId = pathname.split('/')[3];
+      const projects = readProjects();
+      const project = projects.find(p => p.id === projectId);
+      
+      if (!project) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      // Check permissions
+      if (currentUser.role !== 'admin' && currentUser.id !== project.ownerId) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden' }));
+        return;
+      }
+      
+      const body = await parseBody(req);
+      const { name, description, lead_id } = body;
+      
+      if (name) project.name = String(name);
+      if (description !== undefined) project.description = String(description);
+      if (lead_id !== undefined) {
+        if (lead_id) {
+          const users = readUsers();
+          const leadUser = users.find(u => u.id === lead_id);
+          if (!leadUser) {
+            throw new Error('Lead user not found');
+          }
+        }
+        project.leadId = lead_id;
+      }
+      
+      project.updatedAt = new Date().toISOString();
+      writeProjects(projects);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(project));
+      return;
+    }
+    
+    // ENHANCED: Delete project (admin only)
+    if (method === 'DELETE' && pathname.startsWith('/api/projects/') && pathname.split('/').length === 4) {
+      const projectId = pathname.split('/')[3];
+      
+      // Only admin can delete projects
+      if (currentUser.role !== 'admin') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Only administrators can delete projects' }));
+        return;
+      }
+      
+      try {
+        const deletionResult = deleteProjectCompletely(projectId);
+        
+        // Send notification to project stakeholders
+        const users = readUsers();
+        const stakeholderIds = users.filter(u => 
+          ['admin', 'project_manager'].includes(u.role) && u.id !== currentUser.id
+        ).map(u => u.id);
+        
+        sendNotification(
+          stakeholderIds, 
+          `🗑️ Project "${deletionResult.project}" was deleted by ${currentUser.email}`
+        );
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          message: 'Project deleted successfully',
+          details: deletionResult
+        }));
+      } catch (err) {
+        console.error('Error deleting project:', err);
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+    
+    // List issues for a project
+    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/issues')) {
+      const projectId = pathname.split('/')[3];
+      
+      const projects = readProjects();
+      if (!projects.find(p => p.id === projectId)) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      const issues = readIssues();
+      const attachments = readAttachments();
+      const users = readUsers();
+      
+      const projectIssues = issues.filter(i => i.projectId === projectId).map(issue => {
+        const creator = users.find(u => u.id === issue.creatorId);
+        const assignee = issue.assignee ? users.find(u => u.id === issue.assignee) : null;
+        
+        return {
+          ...issue,
+          creatorEmail: creator ? creator.email : null,
+          assigneeEmail: assignee ? assignee.email : null,
+          attachments: attachments.filter(a => a.issueId === issue.id)
+        };
+      });
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(projectIssues));
+      return;
+    }
+    
+    // Get single issue with attachments
+    if (method === 'GET' && pathname.startsWith('/api/issues/') && !pathname.includes('/attachments')) {
+      const issueId = pathname.split('/')[3];
+      
+      const issues = readIssues();
+      const issue = issues.find(i => i.id === issueId);
+      
+      if (!issue) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Issue not found' }));
+        return;
+      }
+      
+      // Include attachments and user info
+      const attachments = readAttachments();
+      const users = readUsers();
+      const creator = users.find(u => u.id === issue.creatorId);
+      const assignee = issue.assignee ? users.find(u => u.id === issue.assignee) : null;
+      
+      const enrichedIssue = {
+        ...issue,
+        creatorEmail: creator ? creator.email : null,
+        assigneeEmail: assignee ? assignee.email : null,
+        attachments: attachments.filter(a => a.issueId === issue.id)
+      };
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(enrichedIssue));
+      return;
+    }
+    
+    // Create an issue with optional file uploads
+    if (method === 'POST' && pathname === '/api/issues') {
+      if (currentUser.role === 'viewer') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden' }));
+        return;
+      }
+      
+      let body, files = {};
+      
+      // Check if this is a form data request (with files)
+      if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+        if (!formidable) {
+          throw new Error('File uploads not supported. Please install formidable: npm install formidable');
+        }
+        const formData = await parseFormData(req);
+        body = {};
+        
+        // Convert form fields to body object
+        Object.keys(formData.fields).forEach(key => {
+          body[key] = Array.isArray(formData.fields[key]) ? formData.fields[key][0] : formData.fields[key];
+        });
+        
+        files = formData.files;
+      } else {
+        body = await parseBody(req);
+      }
+      
+      const {
+        projectId,
+        title,
+        description,
+        priority,
+        status,
+        assignee,
+        dueDate,
+        labels,
+        parentId,
+        sprintId,
+      } = body;
+      
+      if (!projectId || !title) {
+        throw new Error('projectId and title are required');
+      }
+      
+      // Validate project exists
+      const projects = readProjects();
+      const project = projects.find(p => p.id === projectId);
+      if (!project) {
+        throw new Error('Project not found');
+      }
+      
+      // Ensure workflow exists and validate status
+      const workflow = ensureWorkflow(projectId);
+      let issueStatus;
+      if (status) {
+        if (!workflow.statuses.includes(status)) {
+          throw new Error('Invalid status');
+        }
+        issueStatus = status;
+      } else {
+        issueStatus = workflow.statuses[0];
+      }
+      
+      // Validate assignee if provided
+      if (assignee) {
+        const users = readUsers();
+        const assignedUser = users.find(u => u.id === assignee);
+        if (!assignedUser) {
+          throw new Error('Assignee not found');
+        }
+      }
+      
+      // Validate parent issue if provided
+      if (parentId) {
+        const issues = readIssues();
+        const parentIssue = issues.find(i => i.id === parentId && i.projectId === projectId);
+        if (!parentIssue) {
+          throw new Error('Parent issue not found');
+        }
+      }
+      
+      // Validate sprint if provided
+      if (sprintId) {
+        const sprints = readSprints();
+        const sprint = sprints.find(s => s.id === sprintId && s.projectId === projectId);
+        if (!sprint) {
+          throw new Error('Sprint not found');
+        }
+      }
+      
+      const issues = readIssues();
+      const newIssue = {
+        id: generateId(),
+        projectId,
+        title: String(title),
+        description: description ? String(description) : '',
+        priority: priority || 'Medium',
+        status: issueStatus,
+        assignee: assignee || null,
+        dueDate: dueDate || null,
+        labels: Array.isArray(labels) ? labels : (labels ? labels.split(',').map(l => l.trim()) : []),
+        parentId: parentId || null,
+        sprintId: sprintId || null,
+        creatorId: currentUser.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      issues.push(newIssue);
+      writeIssues(issues);
+      
+      // Handle file attachments
+      const attachments = [];
+      if (formidable && files && Object.keys(files).length > 0) {
+        Object.values(files).forEach(fileArray => {
+          const fileList = Array.isArray(fileArray) ? fileArray : [fileArray];
+          fileList.forEach(file => {
+            if (file && file.size > 0) {
+              const attachment = saveAttachment(file, newIssue.id, currentUser.id);
+              attachments.push(attachment);
+            }
+          });
+        });
+      }
+      
+      // Include attachments in response
+      newIssue.attachments = attachments;
+      
+      // Send notifications
+      const notifyIds = [];
+      if (assignee && assignee !== currentUser.id) notifyIds.push(assignee);
+      if (project.ownerId && project.ownerId !== currentUser.id) {
+        notifyIds.push(project.ownerId);
+      }
+      sendNotification(notifyIds, `New issue "${newIssue.title}" created in project ${project.name}`);
+      
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(newIssue));
+      return;
+    }
+    
+    // Update an issue with optional file uploads
+    if (method === 'PUT' && pathname.startsWith('/api/issues/')) {
+      const issueId = pathname.split('/')[3];
+      
+      const issues = readIssues();
+      const issue = issues.find(i => i.id === issueId);
+      if (!issue) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Issue not found' }));
+        return;
+      }
+      
+      // Check permissions
+      const projects = readProjects();
+      const project = projects.find(p => p.id === issue.projectId);
+      const isProjectOwner = project && project.ownerId === currentUser.id;
+      const canEdit =
+        currentUser.role === 'admin' ||
+        currentUser.id === issue.creatorId ||
+        currentUser.id === issue.assignee ||
+        isProjectOwner;
+        
+      if (!canEdit) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden' }));
+        return;
+      }
+      
+      let body, files = {};
+      
+      // Check if this is a form data request (with files)
+      if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+        if (!formidable) {
+          throw new Error('File uploads not supported. Please install formidable: npm install formidable');
+        }
+        const formData = await parseFormData(req);
+        body = {};
+        
+        // Convert form fields to body object
+        Object.keys(formData.fields).forEach(key => {
+          body[key] = Array.isArray(formData.fields[key]) ? formData.fields[key][0] : formData.fields[key];
+        });
+        
+        files = formData.files;
+      } else {
+        body = await parseBody(req);
+      }
+      
+      const allowed = ['title', 'description', 'priority', 'status', 'assignee', 'dueDate', 'labels', 'parentId', 'sprintId'];
+      
+      let notifyChangedStatus = false;
+      let notifyChangedAssignee = false;
+      const oldStatus = issue.status;
+      const oldAssignee = issue.assignee;
+      
+      for (const key of allowed) {
+        if (Object.prototype.hasOwnProperty.call(body, key)) {
+          if (key === 'status') {
+            const workflow = ensureWorkflow(issue.projectId);
+            const newStatus = body[key];
+            if (!workflow.statuses.includes(newStatus)) {
+              throw new Error('Invalid status');
+            }
+            if (newStatus !== issue.status) {
+              notifyChangedStatus = true;
+              issue.status = newStatus;
+            }
+            continue;
+          }
+          
+          if (key === 'assignee') {
+            const newAssignee = body[key] || null;
+            if (newAssignee) {
+              const users = readUsers();
+              const exists = users.find(u => u.id === newAssignee);
+              if (!exists) {
+                throw new Error('Assignee not found');
+              }
+            }
+            if (newAssignee !== issue.assignee) {
+              notifyChangedAssignee = true;
+              issue.assignee = newAssignee;
+            }
+            continue;
+          }
+          
+          if (key === 'parentId') {
+            const newParentId = body[key] || null;
+            if (newParentId) {
+              const parentIssue = issues.find(i => i.id === newParentId && i.projectId === issue.projectId);
+              if (!parentIssue) {
+                throw new Error('Parent issue not found');
+              }
+              // Prevent circular references
+              if (newParentId === issue.id) {
+                throw new Error('Issue cannot be its own parent');
+              }
+            }
+            issue.parentId = newParentId;
+            continue;
+          }
+          
+          if (key === 'sprintId') {
+            const newSprintId = body[key] || null;
+            if (newSprintId) {
+              const sprints = readSprints();
+              const sprint = sprints.find(s => s.id === newSprintId && s.projectId === issue.projectId);
+              if (!sprint) {
+                throw new Error('Sprint not found');
+              }
+            }
+            issue.sprintId = newSprintId;
+            continue;
+          }
+          
+          if (key === 'labels') {
+            issue[key] = Array.isArray(body[key]) ? body[key] : (body[key] ? body[key].split(',').map(l => l.trim()) : []);
+            continue;
+          }
+          
+          issue[key] = body[key];
+        }
+      }
+      
+      issue.updatedAt = new Date().toISOString();
+      writeIssues(issues);
+      
+      // Handle new file attachments
+      const newAttachments = [];
+      if (formidable && files && Object.keys(files).length > 0) {
+        Object.values(files).forEach(fileArray => {
+          const fileList = Array.isArray(fileArray) ? fileArray : [fileArray];
+          fileList.forEach(file => {
+            if (file && file.size > 0) {
+              const attachment = saveAttachment(file, issue.id, currentUser.id);
+              newAttachments.push(attachment);
+            }
+          });
+        });
+      }
+      
+      // Get all attachments for this issue
+      const attachments = readAttachments();
+      issue.attachments = attachments.filter(a => a.issueId === issue.id);
+      
+      // Send notifications
+      if (notifyChangedStatus) {
+        const notifyIds = [];
+        if (issue.assignee && issue.assignee !== currentUser.id) notifyIds.push(issue.assignee);
+        if (project && project.ownerId && project.ownerId !== currentUser.id) notifyIds.push(project.ownerId);
+        sendNotification(notifyIds, `Issue "${issue.title}" status changed to ${issue.status}`);
+      }
+      
+      if (notifyChangedAssignee && issue.assignee && issue.assignee !== currentUser.id) {
+        sendNotification([issue.assignee], `You have been assigned issue "${issue.title}"`);
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(issue));
+      return;
+    }
+    
+    // ENHANCED: Delete issue
+    if (method === 'DELETE' && pathname.startsWith('/api/issues/') && pathname.split('/').length === 4) {
+      const issueId = pathname.split('/')[3];
+      
+      const issues = readIssues();
+      const issue = issues.find(i => i.id === issueId);
+      if (!issue) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Issue not found' }));
+        return;
+      }
+      
+      // Enhanced permission check
+      const projects = readProjects();
+      const project = projects.find(p => p.id === issue.projectId);
+      const isProjectOwner = project && project.ownerId === currentUser.id;
+      const canDelete =
+        currentUser.role === 'admin' ||
+        currentUser.id === issue.creatorId ||
+        currentUser.id === issue.assignee ||
+        isProjectOwner;
+        
+      if (!canDelete) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden: You can only delete issues you created, are assigned to, or own the project' }));
+        return;
+      }
+      
+      console.log(`🗑️ Deleting issue: ${issue.title} (by ${currentUser.email})`);
+      
+      // Delete associated attachments
+      const attachments = readAttachments();
+      const issueAttachments = attachments.filter(a => a.issueId === issueId);
+      let deletedFiles = 0;
+      
+      issueAttachments.forEach(attachment => {
+        const filePath = path.join(UPLOADS_DIR, attachment.filename);
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+            deletedFiles++;
+          } catch (err) {
+            console.error(`Failed to delete file ${attachment.filename}:`, err);
+          }
+        }
+      });
+      
+      // Remove attachments from database
+      const updatedAttachments = attachments.filter(a => a.issueId !== issueId);
+      writeAttachments(updatedAttachments);
+      
+      // Delete related notifications
+      const notifications = readNotifications();
+      const updatedNotifications = notifications.filter(n => 
+        !n.message.includes(`"${issue.title}"`)
+      );
+      const deletedNotifications = notifications.length - updatedNotifications.length;
+      if (deletedNotifications > 0) {
+        writeNotifications(updatedNotifications);
+      }
+      
+      // Remove issue
+      const updatedIssues = issues.filter(i => i.id !== issueId);
+      writeIssues(updatedIssues);
+      
+      console.log(`🗑️ Issue deletion complete: ${deletedFiles} files, ${issueAttachments.length} attachments, ${deletedNotifications} notifications`);
+      
+      // Send notification to project stakeholders
+      if (project) {
+        const notifyIds = [];
+        if (project.ownerId && project.ownerId !== currentUser.id) notifyIds.push(project.ownerId);
+        if (issue.assignee && issue.assignee !== currentUser.id) notifyIds.push(issue.assignee);
+        
+        sendNotification(notifyIds, `Issue "${issue.title}" was deleted by ${currentUser.email}`);
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        message: 'Issue deleted successfully',
+        details: {
+          deletedAttachments: issueAttachments.length,
+          deletedFiles,
+          deletedNotifications
+        }
+      }));
+      return;
+    }
+    
+    // Delete attachment
+    if (method === 'DELETE' && pathname.startsWith('/api/issues/') && pathname.includes('/attachments/')) {
+      const parts = pathname.split('/');
+      const issueId = parts[3];
+      const attachmentId = parts[5];
+      
+      const issues = readIssues();
+      const issue = issues.find(i => i.id === issueId);
+      if (!issue) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Issue not found' }));
+        return;
+      }
+      
+      // Check permissions
+      const projects = readProjects();
+      const project = projects.find(p => p.id === issue.projectId);
+      const isProjectOwner = project && project.ownerId === currentUser.id;
+      const canEdit =
+        currentUser.role === 'admin' ||
+        currentUser.id === issue.creatorId ||
+        currentUser.id === issue.assignee ||
+        isProjectOwner;
+        
+      if (!canEdit) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden' }));
+        return;
+      }
+      
+      if (deleteAttachment(attachmentId)) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Attachment deleted' }));
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Attachment not found' }));
+      }
+      return;
+    }
+    
+    // Get workflow for a project
+    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/workflow')) {
+      const projectId = pathname.split('/')[3];
+      
+      const projects = readProjects();
+      if (!projects.find(p => p.id === projectId)) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      const workflow = ensureWorkflow(projectId);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(workflow));
+      return;
+    }
+    
+    // List sprints for a project
+    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/sprints')) {
+      const projectId = pathname.split('/')[3];
+      
+      const projects = readProjects();
+      if (!projects.find(p => p.id === projectId)) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      const sprints = readSprints().filter(sp => sp.projectId === projectId);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(sprints));
+      return;
+    }
+    
+    // Create a sprint for a project
+    if (method === 'POST' && pathname.startsWith('/api/projects/') && pathname.endsWith('/sprints')) {
+      const projectId = pathname.split('/')[3];
+      
+      const projects = readProjects();
+      const project = projects.find(p => p.id === projectId);
+      if (!project) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      const allowedRoles = ['admin', 'project_manager'];
+      const isOwner = project.ownerId === currentUser.id;
+      if (!allowedRoles.includes(currentUser.role) && !isOwner) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden' }));
+        return;
+      }
+      
+      const body = await parseBody(req);
+      const { name, startDate, endDate } = body;
+      
+      if (!name) {
+        throw new Error('Sprint name is required');
+      }
+      
+      // Validate dates
+      if (startDate && endDate && new Date(startDate) >= new Date(endDate)) {
+        throw new Error('End date must be after start date');
+      }
+      
+      const sprints = readSprints();
+      const newSprint = {
+        id: generateId(),
+        projectId,
+        name: String(name),
+        startDate: startDate || null,
+        endDate: endDate || null,
+        status: 'planning',
+        createdAt: new Date().toISOString(),
+        closedAt: null,
+      };
+      
+      sprints.push(newSprint);
+      writeSprints(sprints);
+      
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(newSprint));
+      return;
+    }
+    
+    // NEW: Delete sprint (admin only)
+    if (method === 'DELETE' && pathname.startsWith('/api/sprints/') && pathname.split('/').length === 4) {
+      const sprintId = pathname.split('/')[3];
+      
+      // Only admin can delete sprints
+      if (currentUser.role !== 'admin') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Only administrators can delete sprints' }));
+        return;
+      }
+      
+      try {
+        const deletionResult = deleteSprintCompletely(sprintId);
+        
+        // Send notification to project stakeholders
+        const sprints = readSprints();
+        const sprint = sprints.find(s => s.id === sprintId);
+        if (sprint) {
+          const projects = readProjects();
+          const project = projects.find(p => p.id === sprint.projectId);
+          if (project) {
+            const notifyIds = [project.ownerId].filter(id => id !== currentUser.id);
+            sendNotification(
+              notifyIds, 
+              `🗑️ Sprint "${deletionResult.sprint}" was deleted by ${currentUser.email}. ${deletionResult.movedIssues} issues moved to backlog.`
+            );
+          }
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          message: 'Sprint deleted successfully',
+          details: deletionResult
+        }));
+      } catch (err) {
+        console.error('Error deleting sprint:', err);
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+    
+    // Start a sprint
+    if (method === 'POST' && pathname.startsWith('/api/sprints/') && pathname.endsWith('/start')) {
+      const sprintId = pathname.split('/')[3];
+      
+      const sprints = readSprints();
+      const sprint = sprints.find(sp => sp.id === sprintId);
+      if (!sprint) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Sprint not found' }));
+        return;
+      }
+      
+      const projects = readProjects();
+      const project = projects.find(p => p.id === sprint.projectId);
+      if (!project) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      const allowedRoles = ['admin', 'project_manager'];
+      const isOwner = project.ownerId === currentUser.id;
+      if (!allowedRoles.includes(currentUser.role) && !isOwner) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden' }));
+        return;
+      }
+      
+      if (sprint.status === 'active') {
+        throw new Error('Sprint already started');
+      }
+      if (sprint.status === 'closed') {
+        throw new Error('Cannot start a closed sprint');
+      }
+      
+      sprint.status = 'active';
+      if (!sprint.startDate) {
+        sprint.startDate = new Date().toISOString();
+      }
+      writeSprints(sprints);
+      
+      // Send notifications
+      const issues = readIssues();
+      const sprintIssues = issues.filter(i => i.sprintId === sprintId);
+      const assigneeIds = [...new Set(sprintIssues.map(i => i.assignee).filter(Boolean))];
+      const notifyIds = [...new Set([project.ownerId, ...assigneeIds])].filter(id => id !== currentUser.id);
+      sendNotification(notifyIds, `Sprint "${sprint.name}" has started`);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(sprint));
+      return;
+    }
+    
+    // Close a sprint
+    if (method === 'POST' && pathname.startsWith('/api/sprints/') && pathname.endsWith('/close')) {
+      const sprintId = pathname.split('/')[3];
+      
+      const sprints = readSprints();
+      const sprint = sprints.find(sp => sp.id === sprintId);
+      if (!sprint) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Sprint not found' }));
+        return;
+      }
+      
+      const projects = readProjects();
+      const project = projects.find(p => p.id === sprint.projectId);
+      if (!project) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      const allowedRoles = ['admin', 'project_manager'];
+      const isOwner = project.ownerId === currentUser.id;
+      if (!allowedRoles.includes(currentUser.role) && !isOwner) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden' }));
+        return;
+      }
+      
+      if (sprint.status === 'closed') {
+        throw new Error('Sprint already closed');
+      }
+      
+      sprint.status = 'closed';
+      sprint.closedAt = new Date().toISOString();
+      if (!sprint.endDate) sprint.endDate = sprint.closedAt;
+      writeSprints(sprints);
+      
+      // Move incomplete issues to backlog (remove from sprint)
+      const issues = readIssues();
+      let movedCount = 0;
+      for (const issue of issues) {
+        if (issue.sprintId === sprintId && issue.status !== 'Done') {
+          issue.sprintId = null;
+          movedCount++;
+        }
+      }
+      if (movedCount > 0) writeIssues(issues);
+      
+      // Send notifications
+      const sprintIssues = issues.filter(i => i.sprintId === sprintId || (movedCount > 0 && !i.sprintId));
+      const assigneeIds = [...new Set(sprintIssues.map(i => i.assignee).filter(Boolean))];
+      const notifyIds = [...new Set([project.ownerId, ...assigneeIds])].filter(id => id !== currentUser.id);
+      sendNotification(notifyIds, `Sprint "${sprint.name}" has been closed. ${movedCount} incomplete issues moved to backlog.`);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(sprint));
+      return;
+    }
+    
+    // Get board for a project
+    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/board')) {
+      const projectId = pathname.split('/')[3];
+      
+      const projects = readProjects();
+      if (!projects.find(p => p.id === projectId)) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      const workflow = ensureWorkflow(projectId);
+      const issues = readIssues();
+      const attachments = readAttachments();
+      const users = readUsers();
+      
+      // Filter by sprint if specified
+      const sprintId = parsedUrl.query.sprintId;
+      const filtered = issues.filter(i => 
+        i.projectId === projectId && 
+        (sprintId === undefined || i.sprintId === sprintId)
+      );
+      
+      // Add attachments and user info to issues
+      const filteredWithExtras = filtered.map(issue => {
+        const creator = users.find(u => u.id === issue.creatorId);
+        const assignee = issue.assignee ? users.find(u => u.id === issue.assignee) : null;
+        
+        return {
+          ...issue,
+          creatorEmail: creator ? creator.email : null,
+          assigneeEmail: assignee ? assignee.email : null,
+          attachments: attachments.filter(a => a.issueId === issue.id)
+        };
+      });
+      
+      const board = {};
+      for (const status of workflow.statuses) {
+        board[status] = filteredWithExtras.filter(i => i.status === status);
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(board));
+      return;
+    }
+    
+    // Get backlog for a project
+    if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/backlog')) {
+      const projectId = pathname.split('/')[3];
+      
+      const projects = readProjects();
+      if (!projects.find(p => p.id === projectId)) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      
+      const issues = readIssues();
+      const attachments = readAttachments();
+      const users = readUsers();
+      
+      const backlog = issues.filter(i => i.projectId === projectId && !i.sprintId).map(issue => {
+        const creator = users.find(u => u.id === issue.creatorId);
+        const assignee = issue.assignee ? users.find(u => u.id === issue.assignee) : null;
+        
+        return {
+          ...issue,
+          creatorEmail: creator ? creator.email : null,
+          assigneeEmail: assignee ? assignee.email : null,
+          attachments: attachments.filter(a => a.issueId === issue.id)
+        };
+      });
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(backlog));
+      return;
+    }
+    
+    // Get notifications for current user
+    if (method === 'GET' && pathname === '/api/notifications') {
+      const notifications = readNotifications()
+        .filter(n => n.userId === currentUser.id)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 50); // Limit to last 50 notifications
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(notifications));
+      return;
+    }
+    
+    // Mark notification as read
+    if (method === 'POST' && pathname.startsWith('/api/notifications/') && pathname.endsWith('/read')) {
+      const notifId = pathname.split('/')[3];
+      
+      let notifications = readNotifications();
+      const notif = notifications.find(n => n.id === notifId && n.userId === currentUser.id);
+      if (!notif) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Notification not found' }));
+        return;
+      }
+      
+      notif.read = true;
+      writeNotifications(notifications);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(notif));
+      return;
+    }
+    
+    // Mark all notifications as read
+    if (method === 'POST' && pathname === '/api/notifications/read-all') {
+      let notifications = readNotifications();
+      let updated = false;
+      
+      notifications.forEach(n => {
+        if (n.userId === currentUser.id && !n.read) {
+          n.read = true;
+          updated = true;
+        }
+      });
+      
+      if (updated) {
+        writeNotifications(notifications);
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'All notifications marked as read' }));
+      return;
+    }
+    
+    // If no route matched
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
+    
   } catch (err) {
-    // Generic error handler
-    res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: err.message || 'Bad request' }));
+    console.error('Server error:', err);
+    const isClientError = err.message && (
+      err.message.includes('required') ||
+      err.message.includes('not found') ||
+      err.message.includes('already exists') ||
+      err.message.includes('Invalid') ||
+      err.message.includes('Forbidden') ||
+      err.message.includes('Only administrators')
+    );
+    
+    res.writeHead(isClientError ? 400 : 500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
   }
 });
 
-// Start the server on port 3000. In production you might want to
-// read the port from the environment.
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Jira‑lite server is listening on port ${PORT}`);
+// Start the server
+server.listen(CONFIG.PORT, () => {
+  console.log(`🏆 Crowley App Enhanced server is listening on port ${CONFIG.PORT}`);
+  console.log(`📂 Visit http://localhost:${CONFIG.PORT} to access Crowley App`);
+  console.log(`🗑️ Enhanced delete functionality:`);
+  console.log(`   • Projects: Admin only - comprehensive cleanup`);
+  console.log(`   • Sprints: Admin only - issues moved to backlog`);
+  console.log(`   • Issues: Creator/Assignee/Project Owner/Admin`);
+  if (!formidable) {
+    console.log(`⚠️ File uploads disabled. Run 'npm install formidable' to enable.`);
+  } else {
+    console.log(`✅ File uploads enabled (max size: ${CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB)`);
+  }
 });

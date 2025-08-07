@@ -5,14 +5,14 @@
     "title": "Bug in login",
     "description": "Cannot login when password has spaces.",
     "priority": "High",
-    "status": "In Progress",
+    "status": "To Do",
     "assignee": null,
     "dueDate": null,
     "labels": [],
     "parentId": null,
     "creatorId": "906f0f12f2c0e6f9",
     "createdAt": "2025-08-04T13:51:46.604Z",
-    "updatedAt": "2025-08-04T13:59:23.099Z",
-    "sprintId": "b94e4c37ffbfa5e8"
+    "updatedAt": "2025-08-04T22:45:09.018Z",
+    "sprintId": null
   }
 ]

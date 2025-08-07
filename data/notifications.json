@@ -12,5 +12,26 @@
     "message": "Issue \"Bug in login\" status changed to In Progress",
     "read": false,
     "createdAt": "2025-08-04T13:59:23.100Z"
+  },
+  {
+    "id": "42d8f7d13f66b05a",
+    "userId": "cabfe557df657a3c",
+    "message": "Sprint \"Toro Graphix -Summer\" has started",
+    "read": false,
+    "createdAt": "2025-08-04T22:36:19.480Z"
+  },
+  {
+    "id": "e2b6ff563fd271f1",
+    "userId": "906f0f12f2c0e6f9",
+    "message": "Issue \"Bug in login\" status changed to To Do",
+    "read": false,
+    "createdAt": "2025-08-04T22:45:09.019Z"
+  },
+  {
+    "id": "feba6fe87c83922b",
+    "userId": "906f0f12f2c0e6f9",
+    "message": "Sprint \"Sprint 1\" has been closed",
+    "read": false,
+    "createdAt": "2025-08-04T22:46:01.257Z"
   }
 ]
