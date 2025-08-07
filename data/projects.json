@@ -35,5 +35,14 @@
     "ownerId": "cabfe557df657a3c",
     "leadId": "cabfe557df657a3c",
     "createdAt": "2025-08-05T14:06:39.354Z"
+  },
+  {
+    "id": "d96c8f80393d7f63",
+    "name": "Franco",
+    "key": "FRANCO",
+    "description": "",
+    "ownerId": "cabfe557df657a3c",
+    "leadId": null,
+    "createdAt": "2025-08-07T14:37:57.990Z"
   }
 ]

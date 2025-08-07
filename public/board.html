@@ -23,13 +23,17 @@
       --glow: 0 0 20px rgba(255,215,0,0.3);
       --radius: 8px;
       --sidebar-width: 240px;
+      --ai-color: #9d4edd;
+      --ai-hover: #b06efc;
+      --ai-glow: 0 0 20px rgba(157, 78, 221, 0.5);
     }
-
+    
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
+
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -752,7 +756,210 @@
         padding: 14px;
       }
     }
+
+    /* Enhanced Board Integration CSS from boardAI.html */
+    .enhanced-ai-card {
+      position: relative;
+      background: linear-gradient(135deg, var(--background-primary) 0%, var(--background-secondary) 100%);
+    }
+
+    .enhanced-ai-card .ai-indicators {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      display: flex;
+      gap: 3px;
+      z-index: 2;
+    }
+
+    .ai-indicator {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--ai-color);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      cursor: help;
+      opacity: 0.8;
+      transition: all 0.3s ease;
+    }
+
+    .ai-indicator:hover {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+
+    .ai-indicator.suggestions {
+      background: var(--warning-color);
+    }
+
+    .ai-indicator.similar {
+      background: var(--success-color);
+    }
+
+    .ai-indicator.confident {
+      background: var(--primary-color);
+      color: var(--background-primary);
+    }
+
+    .ai-loading-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      background: rgba(157, 78, 221, 0.1);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--ai-color);
+      margin-top: 8px;
+    }
+
+    .mini-spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid transparent;
+      border-top: 2px solid var(--ai-color);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .issue-action-btn.ai-btn {
+      background: var(--ai-color);
+      color: white;
+      border: none;
+    }
+
+    .issue-action-btn.ai-btn:hover {
+      background: var(--ai-hover);
+      box-shadow: 0 0 10px rgba(157, 78, 221, 0.3);
+    }
+
+    .inline-comments-container {
+      margin-top: 8px;
+    }
+
+    .ai-notification {
+      background: linear-gradient(135deg, var(--ai-color) 0%, var(--ai-hover) 100%);
+      color: white;
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 2px solid var(--ai-color);
+      box-shadow: var(--ai-glow);
+      animation: slideInFromTop 0.5s ease-out;
+      position: relative;
+    }
+
+    @keyframes slideInFromTop {
+      from {
+        transform: translateY(-100px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .ai-notification-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
+
+    .ai-notification-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .dismiss-btn {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.3s ease;
+    }
+
+    .dismiss-btn:hover {
+      opacity: 1;
+    }
+
+    .ai-recommendations {
+      margin-bottom: 15px;
+    }
+
+    .ai-recommendation {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin: 8px 0;
+      border-left: 3px solid rgba(255, 255, 255, 0.3);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .project-health {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+    }
+
+    .health-label {
+      font-weight: 500;
+    }
+
+    .health-score {
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.2);
+      font-size: 14px;
+    }
+
+    .health-score.healthy { 
+      color: #00ff88; 
+      background: rgba(0, 255, 136, 0.2);
+    }
+    
+    .health-score.warning { 
+      color: #ffaa44; 
+      background: rgba(255, 170, 68, 0.2);
+    }
+    
+    .health-score.critical { 
+      color: #ff6666; 
+      background: rgba(255, 102, 102, 0.2);
+    }
+
+    /* Enhanced issue cards hover effects */
+    .enhanced-ai-card:hover {
+      border-color: var(--ai-color);
+      box-shadow: var(--ai-glow);
+      transform: translateY(-5px) scale(1.02);
+      background: linear-gradient(135deg, var(--background-secondary) 0%, var(--accent-color) 100%);
+    }
+
+    .enhanced-ai-card:hover .ai-indicators {
+      transform: scale(1.05);
+    }
+
+    .enhanced-ai-card:hover .ai-indicator {
+      opacity: 1;
+    }
   </style>
+  <script src="ai-utils.js"></script>
 </head>
 <body>
   <div class="navbar">
@@ -783,7 +990,6 @@
     <div id="board" class="board" style="display: none;"></div>
   </div>
 
-  <!-- Delete Issue Confirmation Modal -->
   <div id="deleteIssueModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -942,7 +1148,7 @@
         if (response.ok) {
           hideDeleteIssueModal();
           showMessage('🗑️ Issue deleted successfully!', 'success');
-          loadBoard();
+          loadBoardWithAI();
         } else {
           const data = await response.json();
           showMessage(data.error || 'Failed to delete issue');
@@ -957,9 +1163,10 @@
       }
     }
 
-    function createIssueCard(issue) {
+    /* createIssueCard function from original file has been replaced with createEnhancedIssueCard */
+    function createEnhancedIssueCard(issue) {
       const card = document.createElement('div');
-      card.className = 'issue-card';
+      card.className = 'issue-card enhanced-ai-card';
       card.draggable = true;
       card.dataset.issueId = issue.id;
       card.dataset.currentStatus = issue.status;
@@ -975,6 +1182,9 @@
         <div class="issue-card-header">
           <h4>${issue.title}</h4>
           <div class="issue-actions">
+            <button class="issue-action-btn ai-btn" onclick="showAIAnalysis('${issue.id}')" title="AI Analysis">🤖</button>
+            <button class="issue-action-btn" onclick="openIssueDetail('${issue.id}')" title="View Details">👁️</button>
+            <button class="issue-action-btn" onclick="toggleInlineComments('${issue.id}')" title="Quick Comments">💬</button>
             ${canDelete ? `<button class="issue-action-btn delete" onclick="showDeleteIssueModal(${JSON.stringify(issue).replace(/"/g, '&quot;')})">🗑️</button>` : ''}
           </div>
         </div>
@@ -985,9 +1195,17 @@
           </div>
           <span class="issue-id">#${issue.id.substring(0, 8)}</span>
         </div>
+        <div class="ai-loading-indicator" id="ai-loading-${issue.id}" style="display: none;">
+          <div class="mini-spinner"></div>
+          <span>AI analyzing...</span>
+        </div>
+        <div class="inline-comments-container" id="comments-container-${issue.id}"></div>
       `;
 
-      // Drag and drop events
+      // Add AI analysis loading
+      loadAIAnalysisForCard(issue.id, card);
+
+      // Existing drag and drop events...
       card.addEventListener('dragstart', (e) => {
         draggedElement = card;
         draggedIssue = issue;
@@ -1002,14 +1220,52 @@
         draggedIssue = null;
       });
 
-      // Double-click to edit (placeholder for future enhancement)
-      card.addEventListener('dblclick', () => {
-        showMessage(`Double-clicked issue: ${issue.title}`, 'success');
-        // Future: Open issue edit modal
-      });
-
       return card;
     }
+
+    async function loadAIAnalysisForCard(issueId, cardElement) {
+      const loadingIndicator = cardElement.querySelector(`#ai-loading-${issueId}`);
+      
+      try {
+        loadingIndicator.style.display = 'flex';
+        
+        // Load AI analysis in background
+        const analysis = await crowleyAI.getIssueAnalysis(issueId);
+        if (analysis) {
+          // Add AI indicators to card
+          const indicators = createAIIndicatorsForCard(analysis);
+          const cardHeader = cardElement.querySelector('.issue-card-header');
+          cardHeader.insertAdjacentHTML('beforeend', `<div class="ai-indicators">${indicators}</div>`);
+        }
+      } catch (error) {
+        console.log('AI analysis not available for issue:', issueId);
+      } finally {
+        loadingIndicator.style.display = 'none';
+      }
+    }
+
+    function createAIIndicatorsForCard(analysis) {
+      const indicators = [];
+      
+      if (analysis.analysis.suggestions && analysis.analysis.suggestions.length > 0) {
+        indicators.push(`<span class="ai-indicator suggestions" title="${analysis.analysis.suggestions.length} AI suggestions">💡</span>`);
+      }
+      
+      if (analysis.similarIssues && analysis.similarIssues.length > 0) {
+        indicators.push(`<span class="ai-indicator similar" title="${analysis.similarIssues.length} similar issues">🔗</span>`);
+      }
+      
+      if (analysis.analysis.confidence > 80) {
+        indicators.push(`<span class="ai-indicator confident" title="High confidence AI analysis">⭐</span>`);
+      }
+
+      return indicators.join('');
+    }
+
+    // Enhanced openIssueDetail function
+    window.openIssueDetail = function(issueId) {
+      window.open(`/issue-detail.html?issueId=${issueId}`, '_blank');
+    };
 
     function setupDropZone(column, status) {
       column.addEventListener('dragover', (e) => {
@@ -1048,7 +1304,7 @@
 
           if (response.ok) {
             showMessage(`✅ Issue moved to ${status}`, 'success');
-            loadBoard();
+            loadBoardWithAI();
           } else {
             const data = await response.json();
             showMessage(data.error || 'Failed to update issue status');
@@ -1060,7 +1316,8 @@
       });
     }
 
-    async function loadBoard() {
+    /* loadBoard function from original file has been replaced with loadBoardWithAI */
+    async function loadBoardWithAI() {
       const loadingIndicator = document.getElementById('loadingIndicator');
       const boardContainer = document.getElementById('board');
       
@@ -1089,6 +1346,9 @@
             `${projectData.name} Board${sprintId ? ' - Sprint' : ''}`;
         }
 
+        // Load AI insights for project
+        await loadProjectAIInsights();
+
         // Clear and rebuild board
         boardContainer.innerHTML = '';
 
@@ -1107,9 +1367,9 @@
           `;
           column.appendChild(header);
 
-          // Add issues to column
+          // Add issues to column using enhanced card creation
           issues.forEach((issue) => {
-            const card = createIssueCard(issue);
+            const card = createEnhancedIssueCard(issue);
             column.appendChild(card);
           });
 
@@ -1143,13 +1403,17 @@
       } catch (err) {
         console.error('Error loading board:', err);
         showMessage('Failed to load board data. Please try refreshing the page.');
-        loadingIndicator.innerHTML = `
-          <div style="text-align: center;">
-            <h3>⚠️ Error Loading Board</h3>
-            <p>Failed to load board data. Please try again.</p>
-            <button class="btn btn-primary" onclick="loadBoard()" style="margin-top: 15px;">🔄 Retry</button>
-          </div>
-        `;
+      }
+    }
+
+    async function loadProjectAIInsights() {
+      try {
+        const insights = await crowleyAI.getProjectInsights(projectId);
+        if (insights && insights.recommendations.length > 0) {
+          await crowleyAI.createSmartNotifications(projectId);
+        }
+      } catch (error) {
+        console.log('AI insights not available');
       }
     }
 
@@ -1179,23 +1443,39 @@
       // Ctrl/Cmd + R to refresh board
       if (e.key === 'r' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        loadBoard();
+        loadBoardWithAI();
         showMessage('Board refreshed!', 'success');
+      }
+
+      // AI shortcuts
+      if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        loadProjectAIInsights();
+        showMessage('AI insights refreshed!', 'success');
+      }
+      
+      if (e.key === 'i' && e.shiftKey) {
+        e.preventDefault();
+        // Show AI insights modal for current project
+        if (projectData) {
+          crowleyAI.createSmartNotifications(projectData.id);
+        }
       }
     });
 
     // Global functions for onclick handlers
     window.showDeleteIssueModal = showDeleteIssueModal;
+    window.openIssueDetail = openIssueDetail;
 
     // Initialize board
     if (!projectId) {
       showMessage('No project specified');
     } else {
-      loadBoard();
+      loadBoardWithAI();
     }
 
     // Auto-refresh board every 45 seconds
-    setInterval(loadBoard, 45000);
+    setInterval(loadBoardWithAI, 45000);
   </script>
 </body>
 </html>

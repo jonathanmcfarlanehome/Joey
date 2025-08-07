@@ -1,0 +1,672 @@
+// AI-Enhanced Comments Utilities
+// Add these utilities to your public/common.js or create a new ai-utils.js file
+
+/**
+ * AI-Enhanced Comments System Utilities
+ * Provides easy integration of AI features into existing pages
+ */
+
+class CrowleyAI {
+  constructor() {
+    this.enabled = true; // Can be toggled via settings
+    this.baseUrl = window.location.origin;
+  }
+
+  // API helper with authentication
+  async api(path, options = {}) {
+    const opts = {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      ...options
+    };
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      opts.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(path, opts);
+    
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/index.html';
+      return;
+    }
+
+    return response;
+  }
+
+  // Get AI analysis for an issue
+  async getIssueAnalysis(issueId) {
+    try {
+      const response = await this.api(`/api/issues/${issueId}/ai-analysis`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('AI Analysis failed:', error);
+    }
+    return null;
+  }
+
+  // Get AI comment suggestions
+  async getCommentSuggestions(issueId, currentText = '') {
+    try {
+      const response = await this.api(`/api/issues/${issueId}/ai-suggestions`, {
+        method: 'POST',
+        body: JSON.stringify({ currentComment: currentText })
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('AI Suggestions failed:', error);
+    }
+    return { suggestions: { suggestions: [] }, actionItems: [] };
+  }
+
+  // Get project insights
+  async getProjectInsights(projectId) {
+    try {
+      const response = await this.api(`/api/projects/${projectId}/ai-insights`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('AI Insights failed:', error);
+    }
+    return null;
+  }
+
+  // Create AI-enhanced issue card for board view
+  createEnhancedIssueCard(issue, aiAnalysis = null) {
+    const card = document.createElement('div');
+    card.className = 'issue-card enhanced-ai-card';
+    card.draggable = true;
+    card.dataset.issueId = issue.id;
+
+    const priorityClass = this.getPriorityClass(issue.priority);
+    const aiInsight = aiAnalysis ? this.getAIInsightSummary(aiAnalysis) : '';
+
+    card.innerHTML = `
+      <div class="issue-card-header">
+        <h4>${issue.title}</h4>
+        <div class="issue-actions">
+          <button class="issue-action-btn ai-btn" onclick="showAIAnalysis('${issue.id}')">🤖</button>
+          <button class="issue-action-btn" onclick="openIssueDetail('${issue.id}')">👁️</button>
+        </div>
+      </div>
+      ${issue.description ? `<p>${this.truncateText(issue.description, 100)}</p>` : ''}
+      ${aiInsight ? `<div class="ai-insight-preview">${aiInsight}</div>` : ''}
+      <div class="issue-meta">
+        <div>
+          <span class="priority-badge ${priorityClass}">${issue.priority}</span>
+        </div>
+        <span class="issue-id">#${issue.id.substring(0, 8)}</span>
+      </div>
+      <div class="ai-indicators">
+        ${this.createAIIndicators(issue, aiAnalysis)}
+      </div>
+    `;
+
+    return card;
+  }
+
+  // Create AI indicators for issue cards
+  createAIIndicators(issue, aiAnalysis) {
+    if (!aiAnalysis) return '';
+
+    const indicators = [];
+    
+    if (aiAnalysis.analysis.suggestedPriority !== issue.priority) {
+      indicators.push(`<span class="ai-indicator priority" title="AI suggests ${aiAnalysis.analysis.suggestedPriority} priority">📊</span>`);
+    }
+    
+    if (aiAnalysis.similarIssues && aiAnalysis.similarIssues.length > 0) {
+      indicators.push(`<span class="ai-indicator similar" title="${aiAnalysis.similarIssues.length} similar issues found">🔗</span>`);
+    }
+    
+    if (aiAnalysis.analysis.suggestions && aiAnalysis.analysis.suggestions.length > 0) {
+      indicators.push(`<span class="ai-indicator suggestions" title="${aiAnalysis.analysis.suggestions.length} AI suggestions">💡</span>`);
+    }
+
+    return indicators.join('');
+  }
+
+  // Get AI insight summary for preview
+  getAIInsightSummary(aiAnalysis) {
+    if (!aiAnalysis || !aiAnalysis.analysis) return '';
+    
+    const { analysis } = aiAnalysis;
+    return `🤖 ${this.truncateText(analysis.summary, 80)}`;
+  }
+
+  // Create inline comment component
+  createInlineComments(issueId, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const commentsHtml = `
+      <div class="inline-comments" data-issue-id="${issueId}">
+        <div class="comments-toggle" onclick="toggleInlineComments('${issueId}')">
+          💬 <span class="comments-count">0</span> comments
+        </div>
+        <div class="comments-dropdown" id="comments-${issueId}" style="display: none;">
+          <div class="comments-list" id="comments-list-${issueId}">
+            <div class="loading">Loading comments...</div>
+          </div>
+          <div class="quick-comment">
+            <textarea placeholder="Quick comment..." id="quick-comment-${issueId}"></textarea>
+            <div class="quick-comment-actions">
+              <button class="btn-ai btn-sm" onclick="getQuickAISuggestions('${issueId}')">🤖</button>
+              <button class="btn-primary btn-sm" onclick="postQuickComment('${issueId}')">Post</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.insertAdjacentHTML('beforeend', commentsHtml);
+  }
+
+  // Create AI analysis popup
+  async showAIAnalysisPopup(issueId, issue) {
+    const analysis = await this.getIssueAnalysis(issueId);
+    if (!analysis) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'ai-analysis-modal';
+    modal.innerHTML = `
+      <div class="ai-modal-overlay" onclick="closeAIModal()"></div>
+      <div class="ai-modal-content">
+        <div class="ai-modal-header">
+          <h3>🤖 AI Analysis: ${issue.title}</h3>
+          <button onclick="closeAIModal()">✕</button>
+        </div>
+        <div class="ai-modal-body">
+          ${this.renderAIAnalysisContent(analysis)}
+        </div>
+        <div class="ai-modal-actions">
+          <button class="btn btn-primary" onclick="applyAISuggestions('${issueId}', ${JSON.stringify(analysis).replace(/"/g, '&quot;')})">
+            Apply Suggestions
+          </button>
+          <button class="btn btn-secondary" onclick="closeAIModal()">Close</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    setTimeout(() => modal.classList.add('show'), 10);
+  }
+
+  // Render AI analysis content
+  renderAIAnalysisContent(analysis) {
+    const { analysis: data, similarIssues } = analysis;
+    
+    return `
+      <div class="ai-analysis-content">
+        <div class="analysis-section">
+          <h4>📋 Summary</h4>
+          <p>${data.summary}</p>
+          <div class="confidence-meter">
+            <div class="confidence-bar" style="width: ${data.confidence}%"></div>
+            <span>${Math.round(data.confidence)}% confidence</span>
+          </div>
+        </div>
+        
+        <div class="analysis-section">
+          <h4>⏱️ Time Estimate</h4>
+          <p>${data.timeEstimate}</p>
+        </div>
+        
+        <div class="analysis-section">
+          <h4>🏷️ Suggested Labels</h4>
+          <div class="suggested-labels">
+            ${data.suggestedLabels.map(label => `
+              <span class="suggested-label">${label}</span>
+            `).join('')}
+          </div>
+        </div>
+        
+        <div class="analysis-section">
+          <h4>💡 Suggestions</h4>
+          <ul class="ai-suggestions-list">
+            ${data.suggestions.map(suggestion => `
+              <li>${suggestion}</li>
+            `).join('')}
+          </ul>
+        </div>
+        
+        ${similarIssues.length > 0 ? `
+          <div class="analysis-section">
+            <h4>🔗 Similar Issues</h4>
+            <div class="similar-issues-grid">
+              ${similarIssues.map(issue => `
+                <div class="similar-issue-item" onclick="window.open('/issue-detail.html?issueId=${issue.id}', '_blank')">
+                  <div class="similar-issue-title">${issue.title}</div>
+                  <div class="similarity-score">${Math.round(issue.similarity)}% similar</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  // Create AI-enhanced board notifications
+  async createSmartNotifications(projectId) {
+    const insights = await this.getProjectInsights(projectId);
+    if (!insights || insights.recommendations.length === 0) return;
+
+    const notification = document.createElement('div');
+    notification.className = 'ai-notification smart-notification';
+    notification.innerHTML = `
+      <div class="ai-notification-content">
+        <div class="ai-notification-header">
+          <span class="ai-icon">🤖</span>
+          <strong>AI Insights</strong>
+          <button onclick="dismissAINotification()" class="dismiss-btn">✕</button>
+        </div>
+        <div class="ai-recommendations">
+          ${insights.recommendations.slice(0, 3).map(rec => `
+            <div class="ai-recommendation">💡 ${rec}</div>
+          `).join('')}
+        </div>
+        <div class="project-health">
+          <span class="health-label">Project Health:</span>
+          <span class="health-score ${insights.projectHealth.status}">${Math.round(insights.projectHealth.score)}%</span>
+        </div>
+      </div>
+    `;
+
+    // Insert at top of page
+    const content = document.querySelector('.content');
+    if (content) {
+      content.insertBefore(notification, content.firstChild);
+    }
+  }
+
+  // Utility functions
+  getPriorityClass(priority) {
+    switch (priority?.toLowerCase()) {
+      case 'high': return 'priority-high';
+      case 'low': return 'priority-low';
+      default: return 'priority-medium';
+    }
+  }
+
+  truncateText(text, maxLength) {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength - 3) + '...';
+  }
+
+  formatDate(dateString) {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+}
+
+// Global AI instance
+const crowleyAI = new CrowleyAI();
+
+// Global functions for onclick handlers
+window.showAIAnalysis = async function(issueId) {
+  try {
+    // Get issue details first
+    const issueResponse = await crowleyAI.api(`/api/issues/${issueId}`);
+    if (issueResponse.ok) {
+      const issue = await issueResponse.json();
+      await crowleyAI.showAIAnalysisPopup(issueId, issue);
+    }
+  } catch (error) {
+    console.error('Error showing AI analysis:', error);
+  }
+};
+
+window.openIssueDetail = function(issueId) {
+  window.location.href = `/issue-detail.html?issueId=${issueId}`;
+};
+
+window.closeAIModal = function() {
+  const modal = document.querySelector('.ai-analysis-modal');
+  if (modal) {
+    modal.classList.add('closing');
+    setTimeout(() => modal.remove(), 300);
+  }
+};
+
+window.toggleInlineComments = async function(issueId) {
+  const dropdown = document.getElementById(`comments-${issueId}`);
+  const isVisible = dropdown.style.display !== 'none';
+  
+  if (isVisible) {
+    dropdown.style.display = 'none';
+  } else {
+    dropdown.style.display = 'block';
+    await loadInlineComments(issueId);
+  }
+};
+
+window.loadInlineComments = async function(issueId) {
+  const listContainer = document.getElementById(`comments-list-${issueId}`);
+  try {
+    const response = await crowleyAI.api(`/api/issues/${issueId}/comments`);
+    if (response.ok) {
+      const comments = await response.json();
+      
+      if (comments.length === 0) {
+        listContainer.innerHTML = '<div class="no-comments">No comments yet</div>';
+        return;
+      }
+      
+      const commentsHtml = comments.slice(-3).map(comment => `
+        <div class="inline-comment">
+          <div class="comment-author">${comment.authorEmail}</div>
+          <div class="comment-content">${crowleyAI.truncateText(comment.content, 100)}</div>
+          <div class="comment-time">${crowleyAI.formatDate(comment.createdAt)}</div>
+        </div>
+      `).join('');
+      
+      listContainer.innerHTML = commentsHtml;
+      
+      // Update counter
+      const counter = document.querySelector(`[data-issue-id="${issueId}"] .comments-count`);
+      if (counter) counter.textContent = comments.length;
+    }
+  } catch (error) {
+    listContainer.innerHTML = '<div class="error">Error loading comments</div>';
+  }
+};
+
+window.getQuickAISuggestions = async function(issueId) {
+  const textarea = document.getElementById(`quick-comment-${issueId}`);
+  const suggestions = await crowleyAI.getCommentSuggestions(issueId, textarea.value);
+  
+  if (suggestions.suggestions.suggestions.length > 0) {
+    // Show suggestions dropdown or modal
+    showQuickSuggestions(issueId, suggestions.suggestions.suggestions);
+  }
+};
+
+window.postQuickComment = async function(issueId) {
+  const textarea = document.getElementById(`quick-comment-${issueId}`);
+  const content = textarea.value.trim();
+  
+  if (!content) return;
+  
+  try {
+    const response = await crowleyAI.api(`/api/issues/${issueId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content })
+    });
+    
+    if (response.ok) {
+      textarea.value = '';
+      await loadInlineComments(issueId);
+    }
+  } catch (error) {
+    console.error('Error posting comment:', error);
+  }
+};
+
+window.applyAISuggestions = async function(issueId, analysisData) {
+  // Implementation for applying AI suggestions
+  console.log('Applying AI suggestions for issue:', issueId, analysisData);
+  // This could update issue labels, priority, etc.
+  closeAIModal();
+};
+
+window.dismissAINotification = function() {
+  const notification = document.querySelector('.ai-notification');
+  if (notification) {
+    notification.style.animation = 'slideUp 0.3s ease-out';
+    setTimeout(() => notification.remove(), 300);
+  }
+};
+
+// Enhanced CSS for AI features - add to your existing stylesheets
+const aiEnhancedCSS = `
+  .enhanced-ai-card {
+    position: relative;
+    background: linear-gradient(135deg, var(--background-primary), var(--background-secondary));
+  }
+
+  .ai-insight-preview {
+    background: rgba(157, 78, 221, 0.1);
+    border: 1px solid var(--ai-color);
+    border-radius: 4px;
+    padding: 8px;
+    margin: 8px 0;
+    font-size: 12px;
+    color: var(--ai-color);
+  }
+
+  .ai-indicators {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+  }
+
+  .ai-indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--ai-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    cursor: help;
+  }
+
+  .ai-analysis-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .ai-analysis-modal.show {
+    opacity: 1;
+  }
+
+  .ai-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+  }
+
+  .ai-modal-content {
+    background: var(--background-secondary);
+    border: 2px solid var(--ai-color);
+    border-radius: var(--radius);
+    padding: 25px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: var(--ai-glow);
+  }
+
+  .ai-notification {
+    background: linear-gradient(135deg, var(--ai-color), var(--ai-hover));
+    color: white;
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    animation: slideDown 0.5s ease-out;
+  }
+
+  .ai-notification-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    font-weight: 600;
+  }
+
+  .ai-recommendations {
+    margin-bottom: 15px;
+  }
+
+  .ai-recommendation {
+    margin: 8px 0;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    border-left: 3px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .project-health {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .health-score {
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .health-score.healthy { color: #00ff88; }
+  .health-score.warning { color: #ffaa44; }
+  .health-score.critical { color: #ff6666; }
+
+  .inline-comments {
+    margin-top: 10px;
+  }
+
+  .comments-toggle {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 5px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+  }
+
+  .comments-toggle:hover {
+    color: var(--primary-color);
+    background: rgba(255, 215, 0, 0.1);
+  }
+
+  .comments-dropdown {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 10px;
+    margin-top: 5px;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .inline-comment {
+    padding: 8px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+  }
+
+  .comment-author {
+    font-weight: 600;
+    color: var(--primary-color);
+  }
+
+  .comment-content {
+    margin: 4px 0;
+    color: var(--text-primary);
+  }
+
+  .comment-time {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .quick-comment textarea {
+    width: 100%;
+    min-height: 60px;
+    background: var(--background-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px;
+    color: var(--text-primary);
+    font-size: 12px;
+    resize: vertical;
+  }
+
+  .quick-comment-actions {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+    justify-content: flex-end;
+  }
+
+  .btn-ai {
+    background: var(--ai-color);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .btn-ai:hover {
+    background: var(--ai-hover);
+  }
+
+  @keyframes slideDown {
+    from {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+  }
+`;
+
+// Auto-inject AI CSS
+if (document.head) {
+  const style = document.createElement('style');
+  style.textContent = aiEnhancedCSS;
+  document.head.appendChild(style);
+}
+
+// Export for potential module usage
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { CrowleyAI, crowleyAI };
+}

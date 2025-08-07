@@ -1,10 +1,6 @@
-// Crowley App server implementation
-// This file is an updated version of the Crowley backend server.  It includes
-// improved static file handling, JWT‑free session management, file uploads,
-// notifications, sprints, workflows and more.  The server uses only built‑in
-// Node.js modules (plus optional formidable for multipart handling).  When run,
-// the server will listen on the configured port and output status messages
-// identifying itself as the Crowley App server.
+// Enhanced Crowley App server implementation with comprehensive delete functionality
+// This version includes admin-restricted deletion for projects and sprints,
+// plus enhanced issue deletion with proper permission checks.
 
 const http = require('http');
 const fs = require('fs');
@@ -22,7 +18,7 @@ try {
 
 /*
  * Crowley App - Modern Project Management System
- * Enhanced backend with file uploads, issue editing, and notifications
+ * Enhanced backend with comprehensive delete functionality and admin controls
  */
 
 // Configuration
@@ -335,6 +331,162 @@ function deleteAttachment(attachmentId) {
   return true;
 }
 
+// Enhanced delete functions with comprehensive cleanup
+
+// Delete all attachments for multiple issues
+function deleteAttachmentsForIssues(issueIds) {
+  const attachments = readAttachments();
+  const toDelete = attachments.filter(a => issueIds.includes(a.issueId));
+  
+  // Delete physical files
+  toDelete.forEach(attachment => {
+    const filePath = path.join(UPLOADS_DIR, attachment.filename);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.error(`Failed to delete file ${attachment.filename}:`, err);
+      }
+    }
+  });
+  
+  // Remove from database
+  const remaining = attachments.filter(a => !issueIds.includes(a.issueId));
+  writeAttachments(remaining);
+  
+  return toDelete.length;
+}
+
+// Delete all notifications related to specific issues
+function deleteNotificationsForIssues(issueIds, issuesTitles) {
+  const notifications = readNotifications();
+  const issueTitleSet = new Set(issuesTitles);
+  
+  const remaining = notifications.filter(n => {
+    // Remove notifications that mention any of the deleted issues
+    return !issueTitleSet.some(title => n.message.includes(title));
+  });
+  
+  const deletedCount = notifications.length - remaining.length;
+  if (deletedCount > 0) {
+    writeNotifications(remaining);
+  }
+  
+  return deletedCount;
+}
+
+// Comprehensive project deletion
+function deleteProjectCompletely(projectId) {
+  const projects = readProjects();
+  const project = projects.find(p => p.id === projectId);
+  if (!project) {
+    throw new Error('Project not found');
+  }
+  
+  console.log(`🗑️ Starting comprehensive deletion of project: ${project.name}`);
+  
+  // Get all related data
+  const issues = readIssues().filter(i => i.projectId === projectId);
+  const sprints = readSprints().filter(s => s.projectId === projectId);
+  const workflows = readWorkflows().filter(w => w.projectId === projectId);
+  
+  const issueIds = issues.map(i => i.id);
+  const issueTitles = issues.map(i => i.title);
+  const sprintIds = sprints.map(s => s.id);
+  
+  // Delete attachments
+  const deletedAttachments = deleteAttachmentsForIssues(issueIds);
+  console.log(`🗑️ Deleted ${deletedAttachments} attachments`);
+  
+  // Delete notifications
+  const deletedNotifications = deleteNotificationsForIssues(issueIds, issueTitles);
+  console.log(`🗑️ Deleted ${deletedNotifications} notifications`);
+  
+  // Delete issues
+  const allIssues = readIssues();
+  const remainingIssues = allIssues.filter(i => i.projectId !== projectId);
+  writeIssues(remainingIssues);
+  console.log(`🗑️ Deleted ${issues.length} issues`);
+  
+  // Delete sprints
+  const allSprints = readSprints();
+  const remainingSprints = allSprints.filter(s => s.projectId !== projectId);
+  writeSprints(remainingSprints);
+  console.log(`🗑️ Deleted ${sprints.length} sprints`);
+  
+  // Delete workflows
+  const allWorkflows = readWorkflows();
+  const remainingWorkflows = allWorkflows.filter(w => w.projectId !== projectId);
+  writeWorkflows(remainingWorkflows);
+  console.log(`🗑️ Deleted ${workflows.length} workflows`);
+  
+  // Delete project
+  const remainingProjects = projects.filter(p => p.id !== projectId);
+  writeProjects(remainingProjects);
+  console.log(`🗑️ Deleted project: ${project.name}`);
+  
+  return {
+    project: project.name,
+    deletedIssues: issues.length,
+    deletedSprints: sprints.length,
+    deletedAttachments,
+    deletedNotifications,
+    deletedWorkflows: workflows.length
+  };
+}
+
+// Comprehensive sprint deletion
+function deleteSprintCompletely(sprintId) {
+  const sprints = readSprints();
+  const sprint = sprints.find(s => s.id === sprintId);
+  if (!sprint) {
+    throw new Error('Sprint not found');
+  }
+  
+  console.log(`🗑️ Starting deletion of sprint: ${sprint.name}`);
+  
+  // Remove sprint assignment from all issues (move to backlog)
+  const issues = readIssues();
+  let movedIssues = 0;
+  
+  issues.forEach(issue => {
+    if (issue.sprintId === sprintId) {
+      issue.sprintId = null;
+      issue.updatedAt = new Date().toISOString();
+      movedIssues++;
+    }
+  });
+  
+  if (movedIssues > 0) {
+    writeIssues(issues);
+    console.log(`🗑️ Moved ${movedIssues} issues to backlog`);
+  }
+  
+  // Delete sprint notifications
+  const notifications = readNotifications();
+  const remainingNotifications = notifications.filter(n => 
+    !n.message.includes(`"${sprint.name}"`) && 
+    !n.message.includes(`Sprint "${sprint.name}"`)
+  );
+  const deletedNotifications = notifications.length - remainingNotifications.length;
+  
+  if (deletedNotifications > 0) {
+    writeNotifications(remainingNotifications);
+    console.log(`🗑️ Deleted ${deletedNotifications} sprint notifications`);
+  }
+  
+  // Delete the sprint
+  const remainingSprints = sprints.filter(s => s.id !== sprintId);
+  writeSprints(remainingSprints);
+  console.log(`🗑️ Deleted sprint: ${sprint.name}`);
+  
+  return {
+    sprint: sprint.name,
+    movedIssues,
+    deletedNotifications
+  };
+}
+
 // Initialize data files on startup
 initializeDataFile('users.json', []);
 initializeDataFile('projects.json', []);
@@ -346,10 +498,11 @@ initializeDataFile('sessions.json', {});
 initializeDataFile('attachments.json', []);
 
 // Log application start with the new branding
-console.log('🏆 Crowley App - Modern Project Management System');
+console.log('🏆 Crowley App - Modern Project Management System (Enhanced Edition)');
 console.log('📁 Data directory:', DATA_DIR);
 console.log('📎 Uploads directory:', UPLOADS_DIR);
 console.log('🌐 Public directory:', PUBLIC_DIR);
+console.log('🗑️ Enhanced delete functionality enabled');
 
 // Basic HTTP server
 const server = http.createServer(async (req, res) => {
@@ -502,11 +655,11 @@ const server = http.createServer(async (req, res) => {
     // Health check endpoint
     if (pathname === '/api/health' && method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      // Advertise the updated application name to clients
       res.end(JSON.stringify({ 
         status: 'ok', 
-        name: 'Crowley App',
-        version: '2.0.0',
+        name: 'Crowley App Enhanced',
+        version: '2.1.0',
+        features: ['enhanced_delete', 'admin_controls', 'comprehensive_cleanup'],
         uptime: process.uptime() 
       }));
       return;
@@ -778,44 +931,41 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     
-    // Delete project
+    // ENHANCED: Delete project (admin only)
     if (method === 'DELETE' && pathname.startsWith('/api/projects/') && pathname.split('/').length === 4) {
       const projectId = pathname.split('/')[3];
-      const projects = readProjects();
-      const project = projects.find(p => p.id === projectId);
       
-      if (!project) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Project not found' }));
-        return;
-      }
-      
-      // Check permissions - only admin or project owner can delete
-      if (currentUser.role !== 'admin' && currentUser.id !== project.ownerId) {
+      // Only admin can delete projects
+      if (currentUser.role !== 'admin') {
         res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
+        res.end(JSON.stringify({ error: 'Only administrators can delete projects' }));
         return;
       }
       
-      // Remove project and related data
-      const updatedProjects = projects.filter(p => p.id !== projectId);
-      writeProjects(updatedProjects);
-      
-      // Clean up related data
-      const issues = readIssues();
-      const updatedIssues = issues.filter(i => i.projectId !== projectId);
-      writeIssues(updatedIssues);
-      
-      const sprints = readSprints();
-      const updatedSprints = sprints.filter(s => s.projectId !== projectId);
-      writeSprints(updatedSprints);
-      
-      const workflows = readWorkflows();
-      const updatedWorkflows = workflows.filter(w => w.projectId !== projectId);
-      writeWorkflows(updatedWorkflows);
-      
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ message: 'Project deleted successfully' }));
+      try {
+        const deletionResult = deleteProjectCompletely(projectId);
+        
+        // Send notification to project stakeholders
+        const users = readUsers();
+        const stakeholderIds = users.filter(u => 
+          ['admin', 'project_manager'].includes(u.role) && u.id !== currentUser.id
+        ).map(u => u.id);
+        
+        sendNotification(
+          stakeholderIds, 
+          `🗑️ Project "${deletionResult.project}" was deleted by ${currentUser.email}`
+        );
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          message: 'Project deleted successfully',
+          details: deletionResult
+        }));
+      } catch (err) {
+        console.error('Error deleting project:', err);
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
       return;
     }
     
@@ -1186,7 +1336,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     
-    // Delete issue
+    // ENHANCED: Delete issue
     if (method === 'DELETE' && pathname.startsWith('/api/issues/') && pathname.split('/').length === 4) {
       const issueId = pathname.split('/')[3];
       
@@ -1198,28 +1348,38 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
-      // Check permissions
+      // Enhanced permission check
       const projects = readProjects();
       const project = projects.find(p => p.id === issue.projectId);
       const isProjectOwner = project && project.ownerId === currentUser.id;
       const canDelete =
         currentUser.role === 'admin' ||
         currentUser.id === issue.creatorId ||
+        currentUser.id === issue.assignee ||
         isProjectOwner;
         
       if (!canDelete) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Forbidden' }));
+        res.end(JSON.stringify({ error: 'Forbidden: You can only delete issues you created, are assigned to, or own the project' }));
         return;
       }
+      
+      console.log(`🗑️ Deleting issue: ${issue.title} (by ${currentUser.email})`);
       
       // Delete associated attachments
       const attachments = readAttachments();
       const issueAttachments = attachments.filter(a => a.issueId === issueId);
+      let deletedFiles = 0;
+      
       issueAttachments.forEach(attachment => {
         const filePath = path.join(UPLOADS_DIR, attachment.filename);
         if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
+          try {
+            fs.unlinkSync(filePath);
+            deletedFiles++;
+          } catch (err) {
+            console.error(`Failed to delete file ${attachment.filename}:`, err);
+          }
         }
       });
       
@@ -1227,12 +1387,40 @@ const server = http.createServer(async (req, res) => {
       const updatedAttachments = attachments.filter(a => a.issueId !== issueId);
       writeAttachments(updatedAttachments);
       
+      // Delete related notifications
+      const notifications = readNotifications();
+      const updatedNotifications = notifications.filter(n => 
+        !n.message.includes(`"${issue.title}"`)
+      );
+      const deletedNotifications = notifications.length - updatedNotifications.length;
+      if (deletedNotifications > 0) {
+        writeNotifications(updatedNotifications);
+      }
+      
       // Remove issue
       const updatedIssues = issues.filter(i => i.id !== issueId);
       writeIssues(updatedIssues);
       
+      console.log(`🗑️ Issue deletion complete: ${deletedFiles} files, ${issueAttachments.length} attachments, ${deletedNotifications} notifications`);
+      
+      // Send notification to project stakeholders
+      if (project) {
+        const notifyIds = [];
+        if (project.ownerId && project.ownerId !== currentUser.id) notifyIds.push(project.ownerId);
+        if (issue.assignee && issue.assignee !== currentUser.id) notifyIds.push(issue.assignee);
+        
+        sendNotification(notifyIds, `Issue "${issue.title}" was deleted by ${currentUser.email}`);
+      }
+      
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ message: 'Issue deleted successfully' }));
+      res.end(JSON.stringify({ 
+        message: 'Issue deleted successfully',
+        details: {
+          deletedAttachments: issueAttachments.length,
+          deletedFiles,
+          deletedNotifications
+        }
+      }));
       return;
     }
     
@@ -1359,6 +1547,48 @@ const server = http.createServer(async (req, res) => {
       
       res.writeHead(201, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(newSprint));
+      return;
+    }
+    
+    // NEW: Delete sprint (admin only)
+    if (method === 'DELETE' && pathname.startsWith('/api/sprints/') && pathname.split('/').length === 4) {
+      const sprintId = pathname.split('/')[3];
+      
+      // Only admin can delete sprints
+      if (currentUser.role !== 'admin') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Only administrators can delete sprints' }));
+        return;
+      }
+      
+      try {
+        const deletionResult = deleteSprintCompletely(sprintId);
+        
+        // Send notification to project stakeholders
+        const sprints = readSprints();
+        const sprint = sprints.find(s => s.id === sprintId);
+        if (sprint) {
+          const projects = readProjects();
+          const project = projects.find(p => p.id === sprint.projectId);
+          if (project) {
+            const notifyIds = [project.ownerId].filter(id => id !== currentUser.id);
+            sendNotification(
+              notifyIds, 
+              `🗑️ Sprint "${deletionResult.sprint}" was deleted by ${currentUser.email}. ${deletionResult.movedIssues} issues moved to backlog.`
+            );
+          }
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          message: 'Sprint deleted successfully',
+          details: deletionResult
+        }));
+      } catch (err) {
+        console.error('Error deleting sprint:', err);
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
       return;
     }
     
@@ -1616,7 +1846,8 @@ const server = http.createServer(async (req, res) => {
       err.message.includes('not found') ||
       err.message.includes('already exists') ||
       err.message.includes('Invalid') ||
-      err.message.includes('Forbidden')
+      err.message.includes('Forbidden') ||
+      err.message.includes('Only administrators')
     );
     
     res.writeHead(isClientError ? 400 : 500, { 'Content-Type': 'application/json' });
@@ -1626,9 +1857,12 @@ const server = http.createServer(async (req, res) => {
 
 // Start the server
 server.listen(CONFIG.PORT, () => {
-  // Use consistent branding in startup messages
-  console.log(`🏆 Crowley App server is listening on port ${CONFIG.PORT}`);
+  console.log(`🏆 Crowley App Enhanced server is listening on port ${CONFIG.PORT}`);
   console.log(`📂 Visit http://localhost:${CONFIG.PORT} to access Crowley App`);
+  console.log(`🗑️ Enhanced delete functionality:`);
+  console.log(`   • Projects: Admin only - comprehensive cleanup`);
+  console.log(`   • Sprints: Admin only - issues moved to backlog`);
+  console.log(`   • Issues: Creator/Assignee/Project Owner/Admin`);
   if (!formidable) {
     console.log(`⚠️ File uploads disabled. Run 'npm install formidable' to enable.`);
   } else {

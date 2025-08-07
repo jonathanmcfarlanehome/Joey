@@ -1,5 +1,6 @@
 // Enhanced Crowley App server implementation with comprehensive delete functionality
-// and AI-powered analytics.
+// This version includes admin-restricted deletion for projects and sprints,
+// plus enhanced issue deletion with proper permission checks.
 
 const http = require('http');
 const fs = require('fs');
@@ -18,7 +19,6 @@ try {
 /*
  * Crowley App - Modern Project Management System
  * Enhanced backend with comprehensive delete functionality and admin controls
- * Now with AI-powered dashboard analytics
  */
 
 // Configuration
@@ -27,7 +27,6 @@ const CONFIG = {
   MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
   SESSION_CLEANUP_INTERVAL: 3600000, // 1 hour
   SESSION_EXPIRY: 86400000 * 7, // 7 days
-  AI_ENABLED: process.env.AI_ENABLED !== 'false'
 };
 
 // Location of our JSON data files
@@ -152,14 +151,6 @@ function readSessions() {
 
 function writeSessions(sessions) {
   writeJson('sessions.json', sessions);
-}
-
-function readComments() {
-  return readJson('comments.json') || [];
-}
-
-function writeComments(comments) {
-  writeJson('comments.json', comments);
 }
 
 // Clean up expired sessions
@@ -481,6 +472,7 @@ function deleteSprintCompletely(sprintId) {
   
   if (deletedNotifications > 0) {
     writeNotifications(remainingNotifications);
+    console.log(`🗑️ Deleted ${deletedNotifications} sprint notifications`);
   }
   
   // Delete the sprint
@@ -495,692 +487,6 @@ function deleteSprintCompletely(sprintId) {
   };
 }
 
-// =====================================================
-// AI DASHBOARD SERVICE LAYER
-// =====================================================
-
-class DashboardAI {
-  constructor() {
-    this.enabled = CONFIG.AI_ENABLED;
-    this.cacheDuration = 5 * 60 * 1000; // 5 minutes cache
-    this.insightsCache = new Map();
-  }
-
-  // Generate comprehensive project analytics
-  async generateProjectAnalytics(projectId, timeframe = '30d') {
-    const cacheKey = `analytics_${projectId}_${timeframe}`;
-    
-    // Check cache first
-    if (this.insightsCache.has(cacheKey)) {
-      const cached = this.insightsCache.get(cacheKey);
-      if (Date.now() - cached.timestamp < this.cacheDuration) {
-        return cached.data;
-      }
-    }
-
-    const issues = readIssues().filter(i => i.projectId === projectId);
-    const comments = readComments().filter(c => 
-      issues.some(issue => issue.id === c.issueId)
-    );
-    const sprints = readSprints().filter(s => s.projectId === projectId);
-    
-    const analytics = {
-      overview: this.generateOverview(issues, comments, sprints),
-      trends: this.analyzeTrends(issues, comments, timeframe),
-      teamPerformance: this.analyzeTeamPerformance(issues, comments),
-      predictions: this.generatePredictions(issues, sprints),
-      bottlenecks: this.identifyBottlenecks(issues, comments),
-      recommendations: this.generateRecommendations(issues, comments, sprints),
-      charts: this.generateChartData(issues, comments, sprints, timeframe)
-    };
-
-    // Cache the results
-    this.insightsCache.set(cacheKey, {
-      data: analytics,
-      timestamp: Date.now()
-    });
-
-    return analytics;
-  }
-
-  generateOverview(issues, comments, sprints) {
-    const totalIssues = issues.length;
-    const openIssues = issues.filter(i => i.status !== 'Done').length;
-    const closedIssues = totalIssues - openIssues;
-    const highPriorityIssues = issues.filter(i => i.priority === 'High').length;
-    const overdue = issues.filter(i => 
-      i.dueDate && new Date(i.dueDate) < new Date() && i.status !== 'Done'
-    ).length;
-
-    const activeSprints = sprints.filter(s => s.status === 'active').length;
-    const completedSprints = sprints.filter(s => s.status === 'closed').length;
-
-    // Calculate completion rate
-    const completionRate = totalIssues > 0 ? (closedIssues / totalIssues) * 100 : 0;
-    
-    // Calculate average resolution time
-    const closedWithDates = issues.filter(i => 
-      i.status === 'Done' && i.createdAt && i.updatedAt
-    );
-    
-    const avgResolutionTime = closedWithDates.length > 0 
-      ? closedWithDates.reduce((sum, issue) => {
-          const created = new Date(issue.createdAt);
-          const resolved = new Date(issue.updatedAt);
-          return sum + (resolved - created);
-        }, 0) / closedWithDates.length / (1000 * 60 * 60 * 24) // days
-      : 0;
-
-    // AI Health Score calculation
-    const healthScore = this.calculateProjectHealth(
-      completionRate, highPriorityIssues, overdue, totalIssues, comments.length
-    );
-
-    return {
-      totalIssues,
-      openIssues,
-      closedIssues,
-      highPriorityIssues,
-      overdue,
-      activeSprints,
-      completedSprints,
-      completionRate: Math.round(completionRate),
-      avgResolutionTime: Math.round(avgResolutionTime * 10) / 10,
-      healthScore: Math.round(healthScore),
-      totalComments: comments.length,
-      lastActivity: this.getLastActivity(issues, comments)
-    };
-  }
-
-  calculateProjectHealth(completionRate, highPriority, overdue, total, commentCount) {
-    let score = 100;
-    
-    // Deduct for low completion rate
-    if (completionRate < 20) score -= 30;
-    else if (completionRate < 50) score -= 15;
-    
-    // Deduct for high priority issues
-    const highPriorityRatio = total > 0 ? (highPriority / total) * 100 : 0;
-    if (highPriorityRatio > 30) score -= 20;
-    else if (highPriorityRatio > 15) score -= 10;
-    
-    // Deduct for overdue issues
-    const overdueRatio = total > 0 ? (overdue / total) * 100 : 0;
-    if (overdueRatio > 20) score -= 25;
-    else if (overdueRatio > 10) score -= 15;
-    
-    // Bonus for active communication
-    const commentsPerIssue = total > 0 ? commentCount / total : 0;
-    if (commentsPerIssue > 3) score += 10;
-    else if (commentsPerIssue > 1.5) score += 5;
-    
-    return Math.max(0, Math.min(100, score));
-  }
-
-  analyzeTrends(issues, comments, timeframe) {
-    const days = parseInt(timeframe.replace('d', ''));
-    const now = new Date();
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-
-    const recentIssues = issues.filter(i => new Date(i.createdAt) >= startDate);
-    const recentComments = comments.filter(c => new Date(c.createdAt) >= startDate);
-
-    // Calculate weekly trends
-    const weeklyData = [];
-    for (let i = 0; i < Math.min(days / 7, 4); i++) {
-      const weekStart = new Date(now.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
-      const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-      
-      const weekIssues = recentIssues.filter(issue => {
-        const created = new Date(issue.createdAt);
-        return created >= weekStart && created < weekEnd;
-      });
-
-      const weekComments = recentComments.filter(comment => {
-        const created = new Date(comment.createdAt);
-        return created >= weekStart && created < weekEnd;
-      });
-
-      weeklyData.unshift({
-        week: `Week ${i + 1}`,
-        issues: weekIssues.length,
-        comments: weekComments.length,
-        completed: weekIssues.filter(i => i.status === 'Done').length,
-        startDate: weekStart.toISOString(),
-        endDate: weekEnd.toISOString()
-      });
-    }
-
-    // Calculate trend direction
-    const issuesTrend = this.calculateTrend(weeklyData.map(w => w.issues));
-    const commentsTrend = this.calculateTrend(weeklyData.map(w => w.comments));
-    const completionTrend = this.calculateTrend(weeklyData.map(w => w.completed));
-
-    return {
-      weeklyData,
-      issueCreationTrend: issuesTrend,
-      commentActivityTrend: commentsTrend,
-      completionTrend: completionTrend,
-      velocity: this.calculateVelocity(recentIssues),
-      burndown: this.calculateBurndown(issues, days)
-    };
-  }
-
-  calculateTrend(dataPoints) {
-    if (dataPoints.length < 2) return 'stable';
-    
-    const recent = dataPoints.slice(-2);
-    const change = ((recent[1] - recent[0]) / Math.max(recent[0], 1)) * 100;
-    
-    if (change > 20) return 'increasing';
-    if (change < -20) return 'decreasing';
-    return 'stable';
-  }
-
-  calculateVelocity(recentIssues) {
-    const completed = recentIssues.filter(i => i.status === 'Done');
-    const inProgress = recentIssues.filter(i => i.status === 'In Progress');
-    
-    return {
-      completed: completed.length,
-      inProgress: inProgress.length,
-      ratio: completed.length > 0 ? completed.length / (completed.length + inProgress.length) : 0
-    };
-  }
-
-  calculateBurndown(issues, days) {
-    const data = [];
-    const now = new Date();
-    
-    for (let i = days; i >= 0; i -= Math.max(1, Math.floor(days / 10))) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const remaining = issues.filter(issue => {
-        const created = new Date(issue.createdAt);
-        const completed = issue.status === 'Done' ? new Date(issue.updatedAt) : null;
-        return created <= date && (!completed || completed > date);
-      }).length;
-      
-      data.push({
-        date: date.toISOString().split('T')[0],
-        remaining,
-        day: days - i
-      });
-    }
-    
-    return data;
-  }
-
-  analyzeTeamPerformance(issues, comments) {
-    const users = readUsers();
-    const userStats = {};
-
-    // Initialize user stats
-    users.forEach(user => {
-      userStats[user.id] = {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        issuesCreated: 0,
-        issuesAssigned: 0,
-        issuesCompleted: 0,
-        commentsPosted: 0,
-        avgResolutionTime: 0,
-        workload: 'balanced',
-        performance: 'average'
-      };
-    });
-
-    // Calculate stats
-    issues.forEach(issue => {
-      if (userStats[issue.creatorId]) {
-        userStats[issue.creatorId].issuesCreated++;
-      }
-      
-      if (issue.assignee && userStats[issue.assignee]) {
-        userStats[issue.assignee].issuesAssigned++;
-        if (issue.status === 'Done') {
-          userStats[issue.assignee].issuesCompleted++;
-        }
-      }
-    });
-
-    comments.forEach(comment => {
-      if (userStats[comment.authorId]) {
-        userStats[comment.authorId].commentsPosted++;
-      }
-    });
-
-    // Calculate workload and performance
-    Object.values(userStats).forEach(stats => {
-      const openIssues = stats.issuesAssigned - stats.issuesCompleted;
-      stats.workload = openIssues > 8 ? 'overloaded' : openIssues > 5 ? 'busy' : 'balanced';
-      
-      const completionRate = stats.issuesAssigned > 0 
-        ? (stats.issuesCompleted / stats.issuesAssigned) * 100 
-        : 0;
-      
-      stats.performance = completionRate > 80 ? 'excellent' : 
-                         completionRate > 60 ? 'good' : 
-                         completionRate > 40 ? 'average' : 'needs-attention';
-      
-      stats.completionRate = Math.round(completionRate);
-    });
-
-    const teamStats = Object.values(userStats).filter(stats => 
-      stats.issuesCreated > 0 || stats.issuesAssigned > 0 || stats.commentsPosted > 0
-    );
-
-    return {
-      individuals: teamStats,
-      summary: {
-        totalMembers: teamStats.length,
-        overloaded: teamStats.filter(s => s.workload === 'overloaded').length,
-        topPerformers: teamStats.filter(s => s.performance === 'excellent').length,
-        needsAttention: teamStats.filter(s => s.performance === 'needs-attention').length
-      }
-    };
-  }
-
-  generatePredictions(issues, sprints) {
-    const openIssues = issues.filter(i => i.status !== 'Done');
-    const completedIssues = issues.filter(i => i.status === 'Done');
-    
-    // Calculate average completion time
-    const avgCompletionTime = this.calculateAverageCompletionTime(completedIssues);
-    
-    // Predict completion dates for open issues
-    const predictions = openIssues.map(issue => {
-      const created = new Date(issue.createdAt);
-      const now = new Date();
-      const ageInDays = (now - created) / (1000 * 60 * 60 * 24);
-      
-      let estimatedDaysRemaining = avgCompletionTime - ageInDays;
-      
-      // Adjust based on priority
-      if (issue.priority === 'High') estimatedDaysRemaining *= 0.7;
-      else if (issue.priority === 'Low') estimatedDaysRemaining *= 1.3;
-      
-      const predictedCompletion = new Date(now.getTime() + Math.max(0, estimatedDaysRemaining) * 24 * 60 * 60 * 1000);
-      
-      return {
-        issueId: issue.id,
-        title: issue.title,
-        predictedCompletion: predictedCompletion.toISOString(),
-        confidence: this.calculatePredictionConfidence(issue, avgCompletionTime),
-        risk: predictedCompletion < (issue.dueDate ? new Date(issue.dueDate) : new Date('2099-12-31')) ? 'low' : 'high'
-      };
-    });
-
-    // Sprint predictions
-    const activeSprints = sprints.filter(s => s.status === 'active');
-    const sprintPredictions = activeSprints.map(sprint => {
-      const sprintIssues = issues.filter(i => i.sprintId === sprint.id);
-      const completed = sprintIssues.filter(i => i.status === 'Done').length;
-      const total = sprintIssues.length;
-      
-      return {
-        sprintId: sprint.id,
-        name: sprint.name,
-        completionPrediction: total > 0 ? (completed / total) * 100 : 0,
-        onTrack: this.isSprintOnTrack(sprint, sprintIssues),
-        estimatedCompletion: this.estimateSprintCompletion(sprint, sprintIssues)
-      };
-    });
-
-    return {
-      issues: predictions,
-      sprints: sprintPredictions,
-      projectCompletion: this.predictProjectCompletion(issues)
-    };
-  }
-
-  calculateAverageCompletionTime(completedIssues) {
-    if (completedIssues.length === 0) return 7; // Default 7 days
-    
-    const completionTimes = completedIssues.map(issue => {
-      const created = new Date(issue.createdAt);
-      const completed = new Date(issue.updatedAt);
-      return (completed - created) / (1000 * 60 * 60 * 24); // days
-    });
-    
-    return completionTimes.reduce((sum, time) => sum + time, 0) / completionTimes.length;
-  }
-
-  calculatePredictionConfidence(issue, avgTime) {
-    let confidence = 70; // Base confidence
-    
-    // Higher confidence for issues with clear descriptions
-    if (issue.description && issue.description.length > 50) confidence += 10;
-    
-    // Higher confidence for assigned issues
-    if (issue.assignee) confidence += 15;
-    
-    // Lower confidence for old issues
-    const ageInDays = (new Date() - new Date(issue.createdAt)) / (1000 * 60 * 60 * 24);
-    if (ageInDays > avgTime * 2) confidence -= 20;
-    
-    return Math.max(20, Math.min(95, confidence));
-  }
-
-  identifyBottlenecks(issues, comments) {
-    const bottlenecks = [];
-    
-    // Status bottlenecks
-    const statusCounts = {};
-    issues.forEach(issue => {
-      statusCounts[issue.status] = (statusCounts[issue.status] || 0) + 1;
-    });
-    
-    Object.entries(statusCounts).forEach(([status, count]) => {
-      if (status !== 'Done' && count > issues.length * 0.4) {
-        bottlenecks.push({
-          type: 'status',
-          issue: `Too many issues stuck in "${status}" status`,
-          severity: 'high',
-          count,
-          suggestion: `Review issues in "${status}" and move them forward`
-        });
-      }
-    });
-    
-    // Assignee bottlenecks
-    const assigneeCounts = {};
-    issues.filter(i => i.assignee && i.status !== 'Done').forEach(issue => {
-      assigneeCounts[issue.assignee] = (assigneeCounts[issue.assignee] || 0) + 1;
-    });
-    
-    Object.entries(assigneeCounts).forEach(([assignee, count]) => {
-      if (count > 10) {
-        const user = readUsers().find(u => u.id === assignee);
-        bottlenecks.push({
-          type: 'assignee',
-          issue: `${user && user.email || 'User'} is overloaded with ${count} open issues`,
-          severity: count > 15 ? 'high' : 'medium',
-          count,
-          suggestion: 'Consider redistributing workload or providing additional resources'
-        });
-      }
-    });
-    
-    // Communication bottlenecks
-    const issuesWithoutComments = issues.filter(issue => 
-      !comments.some(comment => comment.issueId === issue.id) && 
-      issue.status !== 'Done'
-    );
-    
-    if (issuesWithoutComments.length > issues.length * 0.3) {
-      bottlenecks.push({
-        type: 'communication',
-        issue: `${issuesWithoutComments.length} issues lack team discussion`,
-        severity: 'medium',
-        count: issuesWithoutComments.length,
-        suggestion: 'Encourage more team communication and status updates'
-      });
-    }
-    
-    return bottlenecks;
-  }
-
-  generateRecommendations(issues, comments, sprints) {
-    const recommendations = [];
-    
-    // Issue management recommendations
-    const highPriorityIssues = issues.filter(i => i.priority === 'High' && i.status !== 'Done');
-    if (highPriorityIssues.length > 5) {
-      recommendations.push({
-        type: 'priority',
-        title: 'Focus on High Priority Issues',
-        description: `You have ${highPriorityIssues.length} high-priority issues open. Consider addressing these first.`,
-        impact: 'high',
-        effort: 'medium',
-        action: 'Review and assign high-priority issues to available team members'
-      });
-    }
-    
-    // Sprint recommendations
-    const activeSprints = sprints.filter(s => s.status === 'active');
-    if (activeSprints.length > 2) {
-      recommendations.push({
-        type: 'sprint',
-        title: 'Too Many Active Sprints',
-        description: `Running ${activeSprints.length} sprints simultaneously may reduce focus.`,
-        impact: 'medium',
-        effort: 'low',
-        action: 'Consider closing completed sprints or merging related sprints'
-      });
-    }
-    
-    // Team collaboration recommendations
-    const avgCommentsPerIssue = issues.length > 0 ? comments.length / issues.length : 0;
-    if (avgCommentsPerIssue < 1) {
-      recommendations.push({
-        type: 'collaboration',
-        title: 'Increase Team Communication',
-        description: 'Issues have minimal discussion. Better communication can improve quality.',
-        impact: 'medium',
-        effort: 'low',
-        action: 'Encourage team members to comment on issues and share updates'
-      });
-    }
-    
-    // Overdue issues
-    const overdueIssues = issues.filter(i => 
-      i.dueDate && new Date(i.dueDate) < new Date() && i.status !== 'Done'
-    );
-    if (overdueIssues.length > 0) {
-      recommendations.push({
-        type: 'deadline',
-        title: 'Address Overdue Issues',
-        description: `${overdueIssues.length} issues are past their due date.`,
-        impact: 'high',
-        effort: 'high',
-        action: 'Review overdue issues, update deadlines or prioritize completion'
-      });
-    }
-    
-    return recommendations.slice(0, 6); // Top 6 recommendations
-  }
-
-  generateChartData(issues, comments, sprints, timeframe) {
-    const days = parseInt(timeframe.replace('d', ''));
-    
-    return {
-      issuesByStatus: this.generateStatusChart(issues),
-      issuesByPriority: this.generatePriorityChart(issues),
-      activityTimeline: this.generateActivityChart(issues, comments, days),
-      sprintProgress: this.generateSprintChart(sprints, issues),
-      teamWorkload: this.generateTeamChart(issues),
-      trendAnalysis: this.generateTrendChart(issues, days)
-    };
-  }
-
-  generateStatusChart(issues) {
-    const statusCounts = {};
-    issues.forEach(issue => {
-      statusCounts[issue.status] = (statusCounts[issue.status] || 0) + 1;
-    });
-    
-    return Object.entries(statusCounts).map(([status, count]) => ({
-      name: status,
-      value: count,
-      percentage: issues.length > 0 ? Math.round((count / issues.length) * 100) : 0
-    }));
-  }
-
-  generatePriorityChart(issues) {
-    const priorityCounts = {};
-    issues.forEach(issue => {
-      priorityCounts[issue.priority] = (priorityCounts[issue.priority] || 0) + 1;
-    });
-    
-    return Object.entries(priorityCounts).map(([priority, count]) => ({
-      name: priority,
-      value: count,
-      percentage: issues.length > 0 ? Math.round((count / issues.length) * 100) : 0
-    }));
-  }
-
-  generateActivityChart(issues, comments, days) {
-    const data = [];
-    const now = new Date();
-    
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
-      
-      const dayIssues = issues.filter(issue => 
-        new Date(issue.createdAt).toISOString().split('T')[0] === dateStr
-      ).length;
-      
-      const dayComments = comments.filter(comment => 
-        new Date(comment.createdAt).toISOString().split('T')[0] === dateStr
-      ).length;
-      
-      data.push({
-        date: dateStr,
-        issues: dayIssues,
-        comments: dayComments,
-        total: dayIssues + dayComments
-      });
-    }
-    
-    return data;
-  }
-
-  generateSprintChart(sprints, issues) {
-    return sprints.map(sprint => {
-      const sprintIssues = issues.filter(i => i.sprintId === sprint.id);
-      const completed = sprintIssues.filter(i => i.status === 'Done').length;
-      const total = sprintIssues.length;
-      
-      return {
-        name: sprint.name,
-        total,
-        completed,
-        remaining: total - completed,
-        progress: total > 0 ? Math.round((completed / total) * 100) : 0,
-        status: sprint.status
-      };
-    });
-  }
-
-  generateTeamChart(issues) {
-    const users = readUsers();
-    const userWorkload = {};
-    
-    users.forEach(user => {
-      userWorkload[user.id] = {
-        name: user.email,
-        assigned: 0,
-        completed: 0
-      };
-    });
-    
-    issues.forEach(issue => {
-      if (issue.assignee && userWorkload[issue.assignee]) {
-        userWorkload[issue.assignee].assigned++;
-        if (issue.status === 'Done') {
-          userWorkload[issue.assignee].completed++;
-        }
-      }
-    });
-    
-    return Object.values(userWorkload)
-      .filter(user => user.assigned > 0)
-      .map(user => ({
-        ...user,
-        open: user.assigned - user.completed,
-        completionRate: user.assigned > 0 ? Math.round((user.completed / user.assigned) * 100) : 0
-      }));
-  }
-
-  generateTrendChart(issues, days) {
-    const data = [];
-    const now = new Date();
-    
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
-      
-      const totalIssues = issues.filter(issue => 
-        new Date(issue.createdAt) <= date
-      ).length;
-      
-      const completedIssues = issues.filter(issue => 
-        issue.status === 'Done' && new Date(issue.updatedAt) <= date
-      ).length;
-      
-      data.push({
-        date: dateStr,
-        total: totalIssues,
-        completed: completedIssues,
-        open: totalIssues - completedIssues
-      });
-    }
-    
-    return data;
-  }
-
-  getLastActivity(issues, comments) {
-    const allActivities = [
-      ...issues.map(i => new Date(i.updatedAt)),
-      ...comments.map(c => new Date(c.createdAt))
-    ].sort((a, b) => b - a);
-    
-    return allActivities[0] ? allActivities[0].toISOString() : new Date().toISOString();
-  }
-
-  isSprintOnTrack(sprint, sprintIssues) {
-    if (!sprint.startDate || !sprint.endDate) return true;
-    
-    const start = new Date(sprint.startDate);
-    const end = new Date(sprint.endDate);
-    const now = new Date();
-    
-    const totalDuration = end - start;
-    const elapsed = now - start;
-    const progress = elapsed / totalDuration;
-    
-    const completed = sprintIssues.filter(i => i.status === 'Done').length;
-    const total = sprintIssues.length;
-    const completionRate = total > 0 ? completed / total : 1;
-    
-    return completionRate >= progress * 0.8; // 80% of expected progress
-  }
-
-  estimateSprintCompletion(sprint, sprintIssues) {
-    const remaining = sprintIssues.filter(i => i.status !== 'Done').length;
-    if (remaining === 0) return new Date().toISOString();
-    
-    const avgCompletionTime = this.calculateAverageCompletionTime(
-      sprintIssues.filter(i => i.status === 'Done')
-    );
-    
-    const estimatedDays = remaining * (avgCompletionTime / sprintIssues.length);
-    const completion = new Date(Date.now() + estimatedDays * 24 * 60 * 60 * 1000);
-    
-    return completion.toISOString();
-  }
-
-  predictProjectCompletion(issues) {
-    const openIssues = issues.filter(i => i.status !== 'Done').length;
-    const avgCompletionTime = this.calculateAverageCompletionTime(
-      issues.filter(i => i.status === 'Done')
-    );
-    
-    const estimatedDays = openIssues * (avgCompletionTime / Math.max(1, issues.length));
-    const completion = new Date(Date.now() + estimatedDays * 24 * 60 * 60 * 1000);
-    
-    return {
-      estimatedCompletion: completion.toISOString(),
-      remainingIssues: openIssues,
-      confidence: Math.max(30, Math.min(90, 90 - (openIssues * 2)))
-    };
-  }
-}
-
-const dashboardAI = new DashboardAI();
-
 // Initialize data files on startup
 initializeDataFile('users.json', []);
 initializeDataFile('projects.json', []);
@@ -1190,8 +496,6 @@ initializeDataFile('workflows.json', []);
 initializeDataFile('notifications.json', []);
 initializeDataFile('sessions.json', {});
 initializeDataFile('attachments.json', []);
-initializeDataFile('comments.json', []); // New file for comments
-
 
 // Log application start with the new branding
 console.log('🏆 Crowley App - Modern Project Management System (Enhanced Edition)');
@@ -1199,7 +503,6 @@ console.log('📁 Data directory:', DATA_DIR);
 console.log('📎 Uploads directory:', UPLOADS_DIR);
 console.log('🌐 Public directory:', PUBLIC_DIR);
 console.log('🗑️ Enhanced delete functionality enabled');
-console.log('🤖 AI Dashboard features enabled:', CONFIG.AI_ENABLED);
 
 // Basic HTTP server
 const server = http.createServer(async (req, res) => {
@@ -1356,7 +659,7 @@ const server = http.createServer(async (req, res) => {
         status: 'ok', 
         name: 'Crowley App Enhanced',
         version: '2.1.0',
-        features: ['enhanced_delete', 'admin_controls', 'comprehensive_cleanup', 'ai_dashboard'],
+        features: ['enhanced_delete', 'admin_controls', 'comprehensive_cleanup'],
         uptime: process.uptime() 
       }));
       return;
@@ -1808,10 +1111,6 @@ const server = http.createServer(async (req, res) => {
         const parentIssue = issues.find(i => i.id === parentId && i.projectId === projectId);
         if (!parentIssue) {
           throw new Error('Parent issue not found');
-        }
-        // Prevent circular references
-        if (parentId === issue.id) {
-          throw new Error('Issue cannot be its own parent');
         }
       }
       
@@ -2535,186 +1834,6 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ message: 'All notifications marked as read' }));
       return;
     }
-
-    // =====================================================
-    // AI DASHBOARD API ENDPOINTS
-    // =====================================================
-    if (CONFIG.AI_ENABLED) {
-      // Get comprehensive dashboard analytics
-      if (method === 'GET' && pathname === '/api/dashboard/analytics') {
-        const projectId = parsedUrl.query.projectId;
-        const timeframe = parsedUrl.query.timeframe || '30d';
-        
-        if (!projectId) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Project ID is required' }));
-          return;
-        }
-        
-        const projects = readProjects();
-        if (!projects.find(p => p.id === projectId)) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Project not found' }));
-          return;
-        }
-        
-        try {
-          const analytics = await dashboardAI.generateProjectAnalytics(projectId, timeframe);
-          
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            projectId,
-            timeframe,
-            generatedAt: new Date().toISOString(),
-            ...analytics
-          }));
-        } catch (error) {
-          console.error('Dashboard analytics error:', error);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Failed to generate analytics' }));
-        }
-        return;
-      }
-      
-      // Get multi-project overview
-      if (method === 'GET' && pathname === '/api/dashboard/overview') {
-        try {
-          const projects = readProjects();
-          const issues = readIssues();
-          const comments = readComments();
-          const sprints = readSprints();
-          
-          const overview = {
-            totalProjects: projects.length,
-            totalIssues: issues.length,
-            totalComments: comments.length,
-            totalSprints: sprints.length,
-            projectHealth: [],
-            recentActivity: [],
-            topBottlenecks: []
-          };
-          
-          // Calculate health for each project
-          for (const project of projects) {
-            const projectIssues = issues.filter(i => i.projectId === project.id);
-            const projectComments = comments.filter(c => 
-              projectIssues.some(issue => issue.id === c.issueId)
-            );
-            
-            if (projectIssues.length > 0) {
-              const closedIssues = projectIssues.filter(i => i.status === 'Done').length;
-              const completionRate = (closedIssues / projectIssues.length) * 100;
-              const healthScore = dashboardAI.calculateProjectHealth(
-                completionRate,
-                projectIssues.filter(i => i.priority === 'High').length,
-                projectIssues.filter(i => i.dueDate && new Date(i.dueDate) < new Date() && i.status !== 'Done').length,
-                projectIssues.length,
-                projectComments.length
-              );
-              
-              overview.projectHealth.push({
-                id: project.id,
-                name: project.name,
-                health: Math.round(healthScore),
-                totalIssues: projectIssues.length,
-                completionRate: Math.round(completionRate)
-              });
-            }
-          }
-          
-          // Recent activity across all projects
-          const allActivities = [
-            ...issues.map(i => ({ type: 'issue', title: i.title, date: i.createdAt, projectId: i.projectId })),
-            ...comments.map(c => ({ type: 'comment', title: 'Comment posted', date: c.createdAt, issueId: c.issueId }))
-          ].sort((a, b) => new Date(b.date) - new Date(a.date));
-          
-          overview.recentActivity = allActivities.slice(0, 10);
-          
-          // Global bottlenecks
-          const allBottlenecks = [];
-          for (const project of projects) {
-            const projectIssues = issues.filter(i => i.projectId === project.id);
-            const projectComments = comments.filter(c => 
-              projectIssues.some(issue => issue.id === c.issueId)
-            );
-            
-            const bottlenecks = dashboardAI.identifyBottlenecks(projectIssues, projectComments);
-            bottlenecks.forEach(bottleneck => {
-              bottleneck.projectName = project.name;
-              bottleneck.projectId = project.id;
-            });
-            
-            allBottlenecks.push(...bottlenecks);
-          }
-          
-          overview.topBottlenecks = allBottlenecks
-            .sort((a, b) => (b.severity === 'high' ? 2 : b.severity === 'medium' ? 1 : 0) - 
-                           (a.severity === 'high' ? 2 : a.severity === 'medium' ? 1 : 0))
-            .slice(0, 5);
-          
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(overview));
-        } catch (error) {
-          console.error('Dashboard overview error:', error);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Failed to generate overview' }));
-        }
-        return;
-      }
-      
-      // Get AI recommendations for a project
-      if (method === 'GET' && pathname.startsWith('/api/dashboard/') && pathname.endsWith('/recommendations')) {
-        const projectId = pathname.split('/')[3];
-        
-        const projects = readProjects();
-        if (!projects.find(p => p.id === projectId)) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Project not found' }));
-          return;
-        }
-        
-        try {
-          const issues = readIssues().filter(i => i.projectId === projectId);
-          const comments = readComments().filter(c => 
-            issues.some(issue => issue.id === c.issueId)
-          );
-          const sprints = readSprints().filter(s => s.projectId === projectId);
-          
-          const recommendations = dashboardAI.generateRecommendations(issues, comments, sprints);
-          const bottlenecks = dashboardAI.identifyBottlenecks(issues, comments);
-          const predictions = dashboardAI.generatePredictions(issues, sprints);
-          
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            projectId,
-            recommendations,
-            bottlenecks,
-            predictions,
-            generatedAt: new Date().toISOString()
-          }));
-        } catch (error) {
-          console.error('Recommendations error:', error);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Failed to generate recommendations' }));
-        }
-        return;
-      }
-      
-      // Clear analytics cache
-      if (method === 'POST' && pathname === '/api/dashboard/clear-cache') {
-        if (currentUser.role !== 'admin') {
-          res.writeHead(403, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Admin access required' }));
-          return;
-        }
-        
-        dashboardAI.insightsCache.clear();
-        
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Analytics cache cleared' }));
-        return;
-      }
-    }
     
     // If no route matched
     res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -2735,6 +1854,553 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
   }
 });
+
+// Enhanced server.js additions for AI-powered comments system
+// Add these sections to your existing server.js file
+
+// =====================================================
+// AI SERVICE INTEGRATION LAYER
+// =====================================================
+
+// Mock AI service - replace with actual AI API (OpenAI, Claude, etc.)
+class AIAssistant {
+  constructor() {
+    this.enabled = process.env.AI_ENABLED !== 'false';
+    this.apiKey = process.env.AI_API_KEY; // Set in environment variables
+    this.model = process.env.AI_MODEL || 'gpt-3.5-turbo';
+  }
+
+  // Analyze issue content and provide insights
+  async analyzeIssue(issue) {
+    if (!this.enabled) return this.getMockIssueAnalysis(issue);
+    
+    try {
+      // Mock implementation - replace with actual AI API call
+      return this.getMockIssueAnalysis(issue);
+      
+      /* Example OpenAI integration:
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [{
+            role: 'system',
+            content: 'You are an expert project manager. Analyze this issue and provide helpful insights.'
+          }, {
+            role: 'user',
+            content: `Issue: ${issue.title}\nDescription: ${issue.description}\nPriority: ${issue.priority}`
+          }],
+          max_tokens: 500
+        })
+      });
+      
+      const data = await response.json();
+      return this.parseAIResponse(data.choices[0].message.content);
+      */
+    } catch (error) {
+      console.error('AI Analysis failed:', error);
+      return this.getMockIssueAnalysis(issue);
+    }
+  }
+
+  // Suggest smart comment responses
+  async suggestCommentResponse(issue, comments, currentComment = '') {
+    if (!this.enabled) return this.getMockCommentSuggestions(issue, comments);
+    
+    try {
+      return this.getMockCommentSuggestions(issue, comments);
+    } catch (error) {
+      console.error('AI Comment suggestion failed:', error);
+      return this.getMockCommentSuggestions(issue, comments);
+    }
+  }
+
+  // Find similar issues
+  async findSimilarIssues(issue, allIssues) {
+    if (!this.enabled) return this.getMockSimilarIssues(issue, allIssues);
+    
+    // Simple similarity matching for demo
+    const similar = allIssues.filter(i => 
+      i.id !== issue.id && 
+      i.projectId === issue.projectId &&
+      (
+        i.title.toLowerCase().includes(issue.title.toLowerCase().split(' ')[0]) ||
+        i.description.toLowerCase().includes(issue.title.toLowerCase()) ||
+        i.priority === issue.priority
+      )
+    ).slice(0, 3);
+
+    return similar.map(i => ({
+      id: i.id,
+      title: i.title,
+      status: i.status,
+      similarity: Math.random() * 40 + 60 // Mock similarity score
+    }));
+  }
+
+  // Extract action items from comments
+  async extractActionItems(comments) {
+    const actionItems = [];
+    
+    for (const comment of comments) {
+      // Simple regex patterns for action items
+      const patterns = [
+        /(?:need to|should|must|todo|action|task):?\s*(.+)/gi,
+        /(?:^|\s)(?:✓|□|☐|-|\*)\s*(.+)/gm,
+        /(?:assign|delegate|give to|hand over to)\s+(\w+)/gi
+      ];
+      
+      patterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(comment.content)) !== null) {
+          actionItems.push({
+            text: match[1]?.trim(),
+            commentId: comment.id,
+            confidence: Math.random() * 30 + 70
+          });
+        }
+      });
+    }
+    
+    return actionItems.slice(0, 5); // Top 5 action items
+  }
+
+  // Analyze comment sentiment
+  analyzeSentiment(comment) {
+    // Simple keyword-based sentiment analysis
+    const positive = ['good', 'great', 'excellent', 'perfect', 'love', 'awesome', 'fantastic', 'solved', 'fixed', 'works'];
+    const negative = ['bad', 'terrible', 'awful', 'hate', 'broken', 'bug', 'issue', 'problem', 'error', 'fail'];
+    const urgent = ['urgent', 'critical', 'asap', 'immediately', 'emergency', 'blocker'];
+    
+    const text = comment.toLowerCase();
+    let score = 0;
+    let urgency = false;
+    
+    positive.forEach(word => text.includes(word) && score++);
+    negative.forEach(word => text.includes(word) && score--);
+    urgent.forEach(word => text.includes(word) && (urgency = true));
+    
+    return {
+      score: Math.max(-5, Math.min(5, score)),
+      sentiment: score > 0 ? 'positive' : score < 0 ? 'negative' : 'neutral',
+      isUrgent: urgency,
+      confidence: Math.random() * 30 + 70
+    };
+  }
+
+  // Mock responses for development/demo
+  getMockIssueAnalysis(issue) {
+    const insights = [
+      'This issue seems to be a high-priority bug that affects user experience.',
+      'Based on the description, this might be related to authentication or permissions.',
+      'Consider breaking this down into smaller, more manageable subtasks.',
+      'This issue appears to be frontend-related and may require UI/UX expertise.',
+      'The scope seems large - consider creating an epic with multiple stories.'
+    ];
+
+    const suggestions = [
+      'Add more specific acceptance criteria',
+      'Include steps to reproduce the issue',
+      'Consider security implications',
+      'Add relevant labels for better categorization',
+      'Assign to a team member with relevant expertise'
+    ];
+
+    return {
+      summary: insights[Math.floor(Math.random() * insights.length)],
+      suggestedPriority: ['High', 'Medium', 'Low'][Math.floor(Math.random() * 3)],
+      suggestedLabels: ['bug', 'frontend', 'backend', 'urgent', 'enhancement'].sort(() => 0.5 - Math.random()).slice(0, 2),
+      suggestions: suggestions.sort(() => 0.5 - Math.random()).slice(0, 3),
+      confidence: Math.random() * 30 + 70,
+      timeEstimate: `${Math.floor(Math.random() * 8) + 1}-${Math.floor(Math.random() * 8) + 8} hours`
+    };
+  }
+
+  getMockCommentSuggestions(issue, comments) {
+    const suggestions = [
+      'Thanks for the update! Could you provide more details about the error?',
+      'I\'ll take a look at this and get back to you shortly.',
+      'This might be related to the recent changes. Let me investigate.',
+      'Great progress! When do you think this will be ready for testing?',
+      'I\'ve seen this before. Try clearing the cache and restarting the service.',
+      'Could you share a screenshot or error logs to help debug this?',
+      'This looks good to me. Ready to move to the next phase.',
+      'I agree with the proposed solution. Let\'s proceed with implementation.'
+    ];
+
+    return {
+      suggestions: suggestions.sort(() => 0.5 - Math.random()).slice(0, 3),
+      contextAware: true,
+      confidence: Math.random() * 30 + 70
+    };
+  }
+
+  getMockSimilarIssues(issue, allIssues) {
+    return allIssues
+      .filter(i => i.id !== issue.id && i.projectId === issue.projectId)
+      .slice(0, 3)
+      .map(i => ({
+        id: i.id,
+        title: i.title,
+        status: i.status,
+        similarity: Math.random() * 40 + 60
+      }));
+  }
+}
+
+const aiAssistant = new AIAssistant();
+
+// =====================================================
+// COMMENTS DATA FUNCTIONS
+// =====================================================
+
+function readComments() {
+  return readJson('comments.json') || [];
+}
+
+function writeComments(comments) {
+  writeJson('comments.json', comments);
+}
+
+// Initialize comments file
+initializeDataFile('comments.json', []);
+
+// =====================================================
+// COMMENTS API ENDPOINTS
+// =====================================================
+
+// Add these endpoints to your server.js routing logic:
+
+// Get comments for an issue
+if (method === 'GET' && pathname.startsWith('/api/issues/') && pathname.endsWith('/comments')) {
+  const issueId = pathname.split('/')[3];
+  
+  const issues = readIssues();
+  const issue = issues.find(i => i.id === issueId);
+  if (!issue) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Issue not found' }));
+    return;
+  }
+  
+  const comments = readComments();
+  const users = readUsers();
+  
+  const issueComments = comments
+    .filter(c => c.issueId === issueId)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .map(comment => {
+      const author = users.find(u => u.id === comment.authorId);
+      const sentiment = aiAssistant.analyzeSentiment(comment.content);
+      
+      return {
+        ...comment,
+        authorEmail: author ? author.email : 'Unknown',
+        authorRole: author ? author.role : null,
+        sentiment
+      };
+    });
+  
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(issueComments));
+  return;
+}
+
+// Create a new comment
+if (method === 'POST' && pathname.startsWith('/api/issues/') && pathname.endsWith('/comments')) {
+  const issueId = pathname.split('/')[3];
+  
+  if (currentUser.role === 'viewer') {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Forbidden' }));
+    return;
+  }
+  
+  const issues = readIssues();
+  const issue = issues.find(i => i.id === issueId);
+  if (!issue) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Issue not found' }));
+    return;
+  }
+  
+  const body = await parseBody(req);
+  const { content, isAiSuggestion } = body;
+  
+  if (!content || !content.trim()) {
+    throw new Error('Comment content is required');
+  }
+  
+  const comments = readComments();
+  const newComment = {
+    id: generateId(),
+    issueId,
+    authorId: currentUser.id,
+    content: String(content).trim(),
+    isAiSuggestion: Boolean(isAiSuggestion),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  
+  comments.push(newComment);
+  writeComments(comments);
+  
+  // Update issue's updatedAt timestamp
+  issue.updatedAt = new Date().toISOString();
+  writeIssues(issues);
+  
+  // Send notifications to relevant users
+  const projects = readProjects();
+  const project = projects.find(p => p.id === issue.projectId);
+  const notifyIds = [];
+  
+  if (issue.assignee && issue.assignee !== currentUser.id) notifyIds.push(issue.assignee);
+  if (issue.creatorId && issue.creatorId !== currentUser.id) notifyIds.push(issue.creatorId);
+  if (project && project.ownerId && project.ownerId !== currentUser.id) notifyIds.push(project.ownerId);
+  
+  // Also notify other commenters
+  const otherCommenters = comments
+    .filter(c => c.issueId === issueId && c.authorId !== currentUser.id)
+    .map(c => c.authorId);
+  notifyIds.push(...otherCommenters);
+  
+  const uniqueNotifyIds = [...new Set(notifyIds)];
+  sendNotification(uniqueNotifyIds, `New comment on issue "${issue.title}" by ${currentUser.email}`);
+  
+  // Get AI sentiment analysis
+  const sentiment = aiAssistant.analyzeSentiment(content);
+  
+  // Return comment with author info and sentiment
+  const users = readUsers();
+  const author = users.find(u => u.id === currentUser.id);
+  
+  res.writeHead(201, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    ...newComment,
+    authorEmail: author.email,
+    authorRole: author.role,
+    sentiment
+  }));
+  return;
+}
+
+// Update a comment
+if (method === 'PUT' && pathname.startsWith('/api/issues/') && pathname.includes('/comments/')) {
+  const parts = pathname.split('/');
+  const issueId = parts[3];
+  const commentId = parts[5];
+  
+  const comments = readComments();
+  const comment = comments.find(c => c.id === commentId && c.issueId === issueId);
+  
+  if (!comment) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Comment not found' }));
+    return;
+  }
+  
+  // Only author or admin can edit
+  if (comment.authorId !== currentUser.id && currentUser.role !== 'admin') {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Forbidden' }));
+    return;
+  }
+  
+  const body = await parseBody(req);
+  const { content } = body;
+  
+  if (!content || !content.trim()) {
+    throw new Error('Comment content is required');
+  }
+  
+  comment.content = String(content).trim();
+  comment.updatedAt = new Date().toISOString();
+  comment.isEdited = true;
+  
+  writeComments(comments);
+  
+  // Get updated sentiment analysis
+  const sentiment = aiAssistant.analyzeSentiment(content);
+  
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    ...comment,
+    sentiment
+  }));
+  return;
+}
+
+// Delete a comment
+if (method === 'DELETE' && pathname.startsWith('/api/issues/') && pathname.includes('/comments/')) {
+  const parts = pathname.split('/');
+  const issueId = parts[3];
+  const commentId = parts[5];
+  
+  const comments = readComments();
+  const comment = comments.find(c => c.id === commentId && c.issueId === issueId);
+  
+  if (!comment) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Comment not found' }));
+    return;
+  }
+  
+  // Only author or admin can delete
+  if (comment.authorId !== currentUser.id && currentUser.role !== 'admin') {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Forbidden' }));
+    return;
+  }
+  
+  const updatedComments = comments.filter(c => c.id !== commentId);
+  writeComments(updatedComments);
+  
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ message: 'Comment deleted' }));
+  return;
+}
+
+// =====================================================
+// AI ASSISTANT ENDPOINTS
+// =====================================================
+
+// Get AI analysis for an issue
+if (method === 'GET' && pathname.startsWith('/api/issues/') && pathname.endsWith('/ai-analysis')) {
+  const issueId = pathname.split('/')[3];
+  
+  const issues = readIssues();
+  const issue = issues.find(i => i.id === issueId);
+  if (!issue) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Issue not found' }));
+    return;
+  }
+  
+  try {
+    const [analysis, similarIssues] = await Promise.all([
+      aiAssistant.analyzeIssue(issue),
+      aiAssistant.findSimilarIssues(issue, issues)
+    ]);
+    
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      analysis,
+      similarIssues,
+      generatedAt: new Date().toISOString()
+    }));
+  } catch (error) {
+    console.error('AI analysis error:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'AI analysis failed' }));
+  }
+  return;
+}
+
+// Get AI comment suggestions
+if (method === 'POST' && pathname.startsWith('/api/issues/') && pathname.endsWith('/ai-suggestions')) {
+  const issueId = pathname.split('/')[3];
+  
+  const issues = readIssues();
+  const issue = issues.find(i => i.id === issueId);
+  if (!issue) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Issue not found' }));
+    return;
+  }
+  
+  const comments = readComments().filter(c => c.issueId === issueId);
+  const body = await parseBody(req);
+  const { currentComment } = body;
+  
+  try {
+    const suggestions = await aiAssistant.suggestCommentResponse(issue, comments, currentComment);
+    const actionItems = await aiAssistant.extractActionItems(comments);
+    
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      suggestions,
+      actionItems,
+      generatedAt: new Date().toISOString()
+    }));
+  } catch (error) {
+    console.error('AI suggestions error:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'AI suggestions failed' }));
+  }
+  return;
+}
+
+// Get AI insights for project
+if (method === 'GET' && pathname.startsWith('/api/projects/') && pathname.endsWith('/ai-insights')) {
+  const projectId = pathname.split('/')[3];
+  
+  const projects = readProjects();
+  const project = projects.find(p => p.id === projectId);
+  if (!project) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Project not found' }));
+    return;
+  }
+  
+  const issues = readIssues().filter(i => i.projectId === projectId);
+  const comments = readComments().filter(c => 
+    issues.some(issue => issue.id === c.issueId)
+  );
+  
+  try {
+    // Analyze project health
+    const totalIssues = issues.length;
+    const openIssues = issues.filter(i => i.status !== 'Done').length;
+    const highPriorityIssues = issues.filter(i => i.priority === 'High').length;
+    const overdue = issues.filter(i => i.dueDate && new Date(i.dueDate) < new Date()).length;
+    
+    // Sentiment analysis of recent comments
+    const recentComments = comments
+      .filter(c => new Date(c.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+      .map(c => aiAssistant.analyzeSentiment(c.content));
+    
+    const avgSentiment = recentComments.length > 0 
+      ? recentComments.reduce((sum, s) => sum + s.score, 0) / recentComments.length
+      : 0;
+    
+    const insights = {
+      projectHealth: {
+        score: Math.max(0, Math.min(100, 100 - (openIssues / totalIssues * 50) - (highPriorityIssues * 10) - (overdue * 15))),
+        status: openIssues < totalIssues * 0.3 ? 'healthy' : openIssues < totalIssues * 0.7 ? 'warning' : 'critical'
+      },
+      teamMorale: {
+        score: Math.max(0, Math.min(100, 50 + avgSentiment * 10)),
+        sentiment: avgSentiment > 0.5 ? 'positive' : avgSentiment < -0.5 ? 'negative' : 'neutral'
+      },
+      recommendations: [
+        highPriorityIssues > 3 ? 'Consider addressing high-priority issues first' : null,
+        overdue > 0 ? `${overdue} issues are overdue - review deadlines` : null,
+        avgSentiment < -1 ? 'Team sentiment seems low - consider team meeting' : null,
+        openIssues / totalIssues > 0.8 ? 'High number of open issues - focus on closing tasks' : null
+      ].filter(Boolean),
+      stats: {
+        totalIssues,
+        openIssues,
+        closedIssues: totalIssues - openIssues,
+        highPriorityIssues,
+        overdueIssues: overdue,
+        recentActivity: recentComments.length
+      }
+    };
+    
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(insights));
+  } catch (error) {
+    console.error('AI insights error:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'AI insights failed' }));
+  }
+  return;
+}
 
 // Start the server
 server.listen(CONFIG.PORT, () => {
